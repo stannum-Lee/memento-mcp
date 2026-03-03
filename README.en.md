@@ -18,7 +18,7 @@ Contemporary large language model deployments operate under a fundamental archit
 
 We present **Memento MCP**, a persistent memory subsystem implementing the Model Context Protocol (MCP) specification. The system decomposes agent knowledge into discrete, typed *fragments* — atomic units of information semantically classified into six epistemic categories: `fact`, `decision`, `error`, `preference`, `procedure`, and `relation`. Fragment retrieval is implemented as a three-tier cascading search over Redis Set intersection (L1), PostgreSQL GIN-indexed array queries (L2), and pgvector HNSW approximate nearest-neighbor search (L3), with composite ranking over importance and recency dimensions. A background evaluation worker invokes the Google Gemini CLI to assess stored fragment utility asynchronously. An eleven-stage consolidation pipeline manages TTL tier transitions, importance decay, deduplication, and contradiction detection — the latter implemented as a three-stage hybrid of pgvector similarity filtering, NLI (Natural Language Inference) classification via a local mDeBERTa ONNX model, and Gemini CLI escalation for ambiguous cases. Session termination triggers automatic reflection that converts session activity into structured fragments. The `remember` operation proactively creates typed edges to semantically related fragments via direct pgvector cosine similarity queries. Row-Level Security at the PostgreSQL layer enforces agent-scoped isolation without application-layer filtering overhead.
 
-The server exposes eleven MCP tools, supports protocol versions 2024-11-05 through 2025-11-25, implements both Streamable HTTP and Legacy SSE transports, and provides OAuth 2.0 PKCE authentication. Default listening port is 56332.
+The server exposes eleven MCP tools, supports protocol versions 2024-11-05 through 2025-11-25, implements both Streamable HTTP and Legacy SSE transports, and provides OAuth 2.0 PKCE authentication. Default listening port is 57332.
 
 ---
 
@@ -150,6 +150,14 @@ OAuth 2.0 endpoints: `GET /.well-known/oauth-authorization-server`, `GET /.well-
 | `memory-schema.sql` | PostgreSQL DDL for the `agent_memory` schema. |
 | `migration-001-temporal.sql` | Schema migration: adds `valid_from`, `valid_to`, `superseded_by` columns and temporal indexes. |
 | `migration-002-decay.sql` | Schema migration: adds `last_decay_at` column for idempotent decay tracking. |
+| `migration-003-api-keys.sql` | Schema migration: creates `api_keys` and `api_key_usage` tables for API key management. |
+| `migration-004-key-isolation.sql` | Schema migration: adds `key_id` column to `fragments` for per-API-key memory isolation. |
+
+**Admin module:**
+
+| Module | Responsibility |
+|--------|----------------|
+| `lib/admin/ApiKeyStore.js` | API key CRUD operations and authentication verification. SHA-256 hash-only storage; raw key returned once at creation. |
 
 Supporting infrastructure modules:
 
@@ -197,6 +205,7 @@ erDiagram
         timestamptz valid_to "Temporal validity end (NULL=current)"
         text superseded_by "Superseding fragment ID"
         timestamptz last_decay_at "Last decay application timestamp"
+        text key_id "API key isolation (NULL=master)"
     }
     fragment_links {
         bigserial id PK
@@ -247,6 +256,7 @@ The central relation. Each row represents one atomic unit of agent knowledge.
 | `valid_to` | TIMESTAMPTZ | | Temporal validity interval end. NULL indicates the currently active record. |
 | `superseded_by` | TEXT | | ID of the fragment that supersedes this one. |
 | `last_decay_at` | TIMESTAMPTZ | | Timestamp of most recent decay application. Enables idempotent decay: Δt is computed from this column rather than `created_at`. NULL triggers fallback to `COALESCE(accessed_at, created_at, NOW())`. |
+| `key_id` | TEXT | FK → api_keys.id, ON DELETE SET NULL | Per-API-key memory isolation. NULL indicates the fragment was stored via the master key (`MEMENTO_ACCESS_KEY`) and is only accessible to master key requests. A non-null value restricts access to the specific API key that stored it. |
 
 **Index inventory:** `content_hash` (UNIQUE B-tree); `topic` (B-tree); `type` (B-tree); `keywords` (GIN); `importance DESC` (B-tree); `created_at DESC` (B-tree); `agent_id` (B-tree); `linked_to` (GIN); `(ttl_tier, created_at)` (composite B-tree); `source` (B-tree); `verified_at` (B-tree); `is_anchor WHERE is_anchor = TRUE` (partial B-tree); `valid_from` (B-tree); `(topic, type) WHERE valid_to IS NULL` (partial B-tree); `id WHERE valid_to IS NULL` (partial UNIQUE).
 
@@ -324,6 +334,12 @@ CREATE POLICY fragment_isolation_policy ON agent_memory.fragments
 Three access grants are codified: (1) fragments owned by the requesting agent; (2) fragments in the `default` namespace, treated as a shared global knowledge pool accessible — and writable — by all authenticated agents; (3) unrestricted access for maintenance sessions identified as `system` or `admin`.
 
 The `default` namespace is an intentional design decision for shared cross-agent knowledge (e.g., system-wide conventions, shared environment configuration). In multi-agent deployments, any authenticated agent may write to the default namespace. Operators requiring strict namespace isolation should ensure all `remember` calls carry explicit `agentId` values and audit `default`-namespace fragments periodically. The isolation context is established per-transaction via `SET LOCAL app.current_agent_id = $1` prior to query execution, ensuring RLS operates on a per-request rather than per-connection basis.
+
+### 3.7 API Key-Based Memory Isolation
+
+The `key_id` column provides an additional isolation layer orthogonal to the agent-level RLS policy. Fragments stored via the master key (`MEMENTO_ACCESS_KEY`) carry `key_id = NULL` and are accessible only to master key requests. Fragments stored by a provisioned DB API key carry `key_id = <key UUID>` and are visible only to requests authenticated with that specific key.
+
+This model enables per-key memory partitioning in multi-tenant or multi-agent deployments. API keys are provisioned and managed through the Admin SPA at `/v1/internal/model/nothing` (master key authentication required). The raw key (`mmcp_<slug>_<32 hex chars>`) is returned exactly once on creation and is never stored; the database retains only the SHA-256 hash. Key status, daily rate limits, and usage statistics are tracked in the `api_keys` and `api_key_usage` tables created by migration-003.
 
 ---
 
@@ -844,7 +860,7 @@ export const MEMORY_CONFIG = {
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `PORT` | `56332` | TCP port for the HTTP listener |
+| `PORT` | `57332` | TCP port for the HTTP listener |
 | `MEMENTO_ACCESS_KEY` | (empty) | Bearer token for authentication. Authentication disabled when empty. |
 | `SESSION_TTL_MINUTES` | `60` | Session expiration interval in minutes |
 | `LOG_DIR` | `/var/log/mcp` | Winston log file directory |
@@ -1221,6 +1237,12 @@ psql $DATABASE_URL -f lib/memory/migration-001-temporal.sql
 # Decay idempotency: adds last_decay_at column
 psql $DATABASE_URL -f lib/memory/migration-002-decay.sql
 
+# API key management: creates api_keys and api_key_usage tables
+psql $DATABASE_URL -f lib/memory/migration-003-api-keys.sql
+
+# API key isolation: adds key_id column to fragments
+psql $DATABASE_URL -f lib/memory/migration-004-key-isolation.sql
+
 # One-time L2 normalization of existing embeddings (safe to re-run; idempotent)
 DATABASE_URL=$DATABASE_URL node lib/memory/normalize-vectors.js
 ```
@@ -1253,7 +1275,7 @@ Store the access key in an environment variable; do not commit plaintext credent
   "mcpServers": {
     "memento": {
       "type": "http",
-      "url": "http://localhost:56332/mcp",
+      "url": "http://localhost:57332/mcp",
       "headers": {
         "Authorization": "Bearer ${MEMENTO_ACCESS_KEY}"
       }
@@ -1292,6 +1314,14 @@ The server advertises all four versions. Clients negotiate the highest mutually 
 | `GET` | `/.well-known/oauth-protected-resource` | OAuth 2.0 protected resource metadata |
 | `GET` | `/authorize` | OAuth 2.0 authorization endpoint (PKCE required) |
 | `POST` | `/token` | OAuth 2.0 token endpoint (authorization code exchange) |
+| `GET` | `/v1/internal/model/nothing` | Admin SPA. Master key (`MEMENTO_ACCESS_KEY`) authentication required. API key management dashboard. |
+| `POST` | `/v1/internal/model/nothing/auth` | Master key verification endpoint |
+| `GET` | `/v1/internal/model/nothing/stats` | Dashboard statistics (fragment count, API call volume, system metrics) |
+| `GET` | `/v1/internal/model/nothing/activity` | Recent fragment activity log (last 10 entries) |
+| `GET` | `/v1/internal/model/nothing/keys` | List provisioned API keys |
+| `POST` | `/v1/internal/model/nothing/keys` | Create API key. Raw key returned once in response; only hash stored. |
+| `PUT` | `/v1/internal/model/nothing/keys/:id` | Update API key status (active ↔ inactive) |
+| `DELETE` | `/v1/internal/model/nothing/keys/:id` | Delete API key |
 
 ---
 

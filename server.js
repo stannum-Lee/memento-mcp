@@ -11,6 +11,13 @@
  */
 
 import http              from "http";
+import fs               from "node:fs";
+import path             from "node:path";
+import os               from "node:os";
+import { fileURLToPath } from "node:url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname  = path.dirname(__filename);
 
 /** 설정 */
 import { PORT, ACCESS_KEY, SESSION_TTL_MS, LOG_DIR } from "./lib/config.js";
@@ -40,7 +47,13 @@ import {
 } from "./lib/sessions.js";
 
 /** 인증 */
-import { isInitializeRequest, requireAuthentication } from "./lib/auth.js";
+import { isInitializeRequest, requireAuthentication, validateMasterKey, validateAuthentication } from "./lib/auth.js";
+import {
+  listApiKeys,
+  createApiKey,
+  updateApiKeyStatus,
+  deleteApiKey
+} from "./lib/admin/ApiKeyStore.js";
 
 /** OAuth 2.0 */
 import {
@@ -155,6 +168,7 @@ const server               = http.createServer(async (req, res) => {
     res.setHeader("Access-Control-Expose-Headers", "MCP-Session-Id");
 
     let sessionId          = req.headers["mcp-session-id"] || url.searchParams.get("sessionId") || url.searchParams.get("mcp-session-id");
+    let sessionKeyId       = null;
     let msg;
 
     try {
@@ -173,6 +187,7 @@ const server               = http.createServer(async (req, res) => {
       }
 
       const session          = validation.session;
+      sessionKeyId           = session.keyId ?? null;
 
       if (!session.authenticated) {
         if (!await requireAuthentication(req, res, msg, null)) {
@@ -184,12 +199,18 @@ const server               = http.createServer(async (req, res) => {
     }
 
     if (!sessionId && isInitializeRequest(msg)) {
-      if (!await requireAuthentication(req, res, msg, msg.id ?? null)) {
+      const authCheck        = await validateAuthentication(req, msg);
+
+      if (!authCheck.valid) {
+        res.statusCode       = 401;
+        res.setHeader("Content-Type", "application/json; charset=utf-8");
+        res.end(JSON.stringify(jsonRpcError(msg.id ?? null, -32000, authCheck.error)));
         return;
       }
 
-      sessionId            = await createStreamableSession(true);
-      console.log(`[Streamable] Authenticated session created: ${sessionId}`);
+      sessionKeyId           = authCheck.keyId ?? null;
+      sessionId              = await createStreamableSession(true, sessionKeyId);
+      console.log(`[Streamable] Authenticated session created: ${sessionId}${sessionKeyId ? ` (keyId: ${sessionKeyId})` : " (master)"}`);
     }
 
     if (!sessionId) {
@@ -202,9 +223,10 @@ const server               = http.createServer(async (req, res) => {
       return;
     }
 
-    /** tools/call 요청에 _sessionId 주입 (SessionActivityTracker용) */
+    /** tools/call 요청에 _sessionId, _keyId 주입 */
     if (msg.method === "tools/call" && msg.params?.arguments) {
       msg.params.arguments._sessionId = sessionId;
+      msg.params.arguments._keyId     = sessionKeyId;
     }
 
     const { kind, response }  = await dispatchJsonRpc(msg);
@@ -493,6 +515,227 @@ const server               = http.createServer(async (req, res) => {
     res.setHeader("Cache-Control", "no-store");
     res.setHeader("Access-Control-Allow-Origin", "*");
     await sendJSON(res, result.error ? 400 : 200, result, req);
+    return;
+  }
+
+  /* ========================================
+   * Admin: Static UI
+   * GET /v1/internal/model/nothing  → assets/admin/index.html
+   * GET /v1/internal/model/nothing/images/:file → assets/images/:file
+   * ======================================== */
+  const ADMIN_BASE = "/v1/internal/model/nothing";
+
+  if (req.method === "GET" && (url.pathname === ADMIN_BASE || url.pathname === `${ADMIN_BASE}/`)) {
+    const htmlPath = path.join(__dirname, "assets", "admin", "index.html");
+    fs.readFile(htmlPath, (err, data) => {
+      if (err) { res.statusCode = 404; res.end("Admin UI not found"); return; }
+      res.statusCode = 200;
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      res.setHeader("Cache-Control", "no-cache");
+      res.end(data);
+    });
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname.startsWith(`${ADMIN_BASE}/images/`)) {
+    /** path.basename 으로 path traversal 차단 */
+    const filename = path.basename(url.pathname);
+    const imgPath  = path.join(__dirname, "assets", "images", filename);
+    fs.readFile(imgPath, (err, data) => {
+      if (err) { res.statusCode = 404; res.end("Image not found"); return; }
+      const ext = path.extname(filename).toLowerCase();
+      const mime = { ".png": "image/png", ".jpg": "image/jpeg", ".svg": "image/svg+xml" }[ext] || "application/octet-stream";
+      res.statusCode = 200;
+      res.setHeader("Content-Type", mime);
+      res.setHeader("Cache-Control", "public, max-age=86400");
+      res.end(data);
+    });
+    return;
+  }
+
+  /* ========================================
+   * Admin: REST API  (마스터 키 필수)
+   * POST   /v1/internal/model/nothing/auth          → 마스터 키 검증
+   * GET    /v1/internal/model/nothing/stats         → 대시보드 통계
+   * GET    /v1/internal/model/nothing/activity      → 최근 활동 (파편)
+   * GET    /v1/internal/model/nothing/keys          → 키 목록
+   * POST   /v1/internal/model/nothing/keys          → 키 생성
+   * PUT    /v1/internal/model/nothing/keys/:id      → 상태 변경 { status }
+   * DELETE /v1/internal/model/nothing/keys/:id      → 키 삭제
+   * ======================================== */
+  if (url.pathname.startsWith(`${ADMIN_BASE}/`)) {
+    res.setHeader("Access-Control-Allow-Origin", req.headers.origin || "*");
+    res.setHeader("Content-Type", "application/json; charset=utf-8");
+
+    /** 마스터 키 인증 (POST /auth 는 검증 자체가 목적이므로 통과 후 처리) */
+    const isAuthEndpoint = req.method === "POST" && url.pathname === `${ADMIN_BASE}/auth`;
+    if (!isAuthEndpoint && !validateMasterKey(req)) {
+      res.statusCode = 401;
+      res.end(JSON.stringify({ error: "Unauthorized" }));
+      return;
+    }
+
+    /** POST /auth */
+    if (req.method === "POST" && url.pathname === `${ADMIN_BASE}/auth`) {
+      if (validateMasterKey(req)) {
+        res.statusCode = 200;
+        res.end(JSON.stringify({ ok: true }));
+      } else {
+        res.statusCode = 401;
+        res.end(JSON.stringify({ error: "Invalid admin key" }));
+      }
+      return;
+    }
+
+    /** GET /stats */
+    if (req.method === "GET" && url.pathname === `${ADMIN_BASE}/stats`) {
+      try {
+        const pool = getPrimaryPool();
+
+        const [fragR, callR, keyR] = await Promise.all([
+          pool.query("SELECT COUNT(*) AS total FROM agent_memory.fragments"),
+          pool.query(`SELECT COALESCE(SUM(call_count),0) AS total
+                        FROM agent_memory.api_key_usage
+                       WHERE usage_date = CURRENT_DATE`),
+          pool.query("SELECT COUNT(*) AS total FROM agent_memory.api_keys WHERE status='active'"),
+        ]);
+
+        const cpus    = os.cpus();
+        const cpuPct  = Math.min(100, Math.round((os.loadavg()[0] / cpus.length) * 100));
+        const memPct  = Math.round(((os.totalmem() - os.freemem()) / os.totalmem()) * 100);
+
+        let diskPct = 0;
+        try {
+          const d = fs.statfsSync("/");
+          diskPct = Math.round(((d.blocks - d.bfree) / d.blocks) * 100);
+        } catch (_) { /* non-posix */ }
+
+        let dbSizeBytes = 0;
+        try {
+          const { rows: [sr] } = await pool.query(
+            "SELECT pg_database_size(current_database()) AS bytes"
+          );
+          dbSizeBytes = parseInt(sr.bytes);
+        } catch (_) { /* ignore */ }
+
+        const redisStat = (redisClient && redisClient.status === "ready")
+          ? "connected" : "disconnected";
+
+        res.statusCode = 200;
+        res.end(JSON.stringify({
+          fragments:     parseInt(fragR.rows[0].total),
+          sessions:      streamableSessions.size + legacySseSessions.size,
+          apiCallsToday: parseInt(callR.rows[0].total),
+          activeKeys:    parseInt(keyR.rows[0].total),
+          uptime:        Math.floor(process.uptime()),
+          nodeVersion:   process.version,
+          system:        { cpu: cpuPct, memory: memPct, disk: diskPct, dbSizeBytes },
+          db:            "connected",
+          redis:         redisStat,
+        }));
+      } catch (err) {
+        console.error("[Admin] /stats error:", err.message);
+        res.statusCode = 500;
+        res.end(JSON.stringify({ error: err.message }));
+      }
+      return;
+    }
+
+    /** GET /activity */
+    if (req.method === "GET" && url.pathname === `${ADMIN_BASE}/activity`) {
+      try {
+        const pool = getPrimaryPool();
+        const { rows } = await pool.query(`
+          SELECT f.id, f.topic, f.type, f.agent_id, f.key_id, f.created_at,
+                 LEFT(f.content, 80) AS preview,
+                 k.name              AS key_name,
+                 k.key_prefix
+          FROM  agent_memory.fragments f
+          LEFT JOIN agent_memory.api_keys k ON k.id = f.key_id
+          ORDER BY f.created_at DESC
+          LIMIT 10
+        `);
+        res.statusCode = 200;
+        res.end(JSON.stringify(rows));
+      } catch (err) {
+        console.error("[Admin] /activity error:", err.message);
+        res.statusCode = 500;
+        res.end(JSON.stringify({ error: err.message }));
+      }
+      return;
+    }
+
+    /** GET /keys */
+    if (req.method === "GET" && url.pathname === `${ADMIN_BASE}/keys`) {
+      try {
+        const keys = await listApiKeys();
+        res.statusCode = 200;
+        res.end(JSON.stringify(keys));
+      } catch (err) {
+        console.error("[Admin] listApiKeys error:", err.message);
+        res.statusCode = 500;
+        res.end(JSON.stringify({ error: err.message }));
+      }
+      return;
+    }
+
+    /** POST /keys */
+    if (req.method === "POST" && url.pathname === `${ADMIN_BASE}/keys`) {
+      try {
+        const body = await readJsonBody(req);
+        if (!body.name || typeof body.name !== "string") {
+          res.statusCode = 400;
+          res.end(JSON.stringify({ error: "name is required" }));
+          return;
+        }
+        const key = await createApiKey({
+          name:        body.name.trim(),
+          permissions: Array.isArray(body.permissions) ? body.permissions : ["read"],
+          daily_limit: Number(body.daily_limit) || 10000
+        });
+        res.statusCode = 201;
+        res.end(JSON.stringify(key));
+      } catch (err) {
+        console.error("[Admin] createApiKey error:", err.message);
+        res.statusCode = err.message.includes("unique") ? 409 : 500;
+        res.end(JSON.stringify({ error: err.message }));
+      }
+      return;
+    }
+
+    /** PUT /keys/:id */
+    const putMatch = url.pathname.match(/^\/v1\/internal\/model\/nothing\/keys\/([^/]+)$/);
+    if (req.method === "PUT" && putMatch) {
+      try {
+        const body   = await readJsonBody(req);
+        const result = await updateApiKeyStatus(putMatch[1], body.status);
+        res.statusCode = 200;
+        res.end(JSON.stringify(result));
+      } catch (err) {
+        console.error("[Admin] updateApiKeyStatus error:", err.message);
+        res.statusCode = err.message === "Key not found" ? 404 : 400;
+        res.end(JSON.stringify({ error: err.message }));
+      }
+      return;
+    }
+
+    /** DELETE /keys/:id */
+    const delMatch = url.pathname.match(/^\/v1\/internal\/model\/nothing\/keys\/([^/]+)$/);
+    if (req.method === "DELETE" && delMatch) {
+      try {
+        await deleteApiKey(delMatch[1]);
+        res.statusCode = 204;
+        res.end();
+      } catch (err) {
+        console.error("[Admin] deleteApiKey error:", err.message);
+        res.statusCode = err.message === "Key not found" ? 404 : 500;
+        res.end(JSON.stringify({ error: err.message }));
+      }
+      return;
+    }
+
+    res.statusCode = 404;
+    res.end(JSON.stringify({ error: "Not found" }));
     return;
   }
 
