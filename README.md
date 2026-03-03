@@ -34,7 +34,7 @@ Memento MCP는 그 망각에 반대한다.
 
 ![유지보수 사이클](assets/images/maintenance-cycle.png)
 
-MCP 프로토콜 버전 2025-11-25, 2025-06-18, 2025-03-26, 2024-11-05를 지원한다. Streamable HTTP와 Legacy SSE를 동시에 제공하며 OAuth 2.0 PKCE 인증을 내장한다. 서버는 포트 56332에서 대기한다.
+MCP 프로토콜 버전 2025-11-25, 2025-06-18, 2025-03-26, 2024-11-05를 지원한다. Streamable HTTP와 Legacy SSE를 동시에 제공하며 OAuth 2.0 PKCE 인증을 내장한다. 서버는 포트 57332에서 대기한다.
 
 ---
 
@@ -77,7 +77,9 @@ server.js  (HTTP 서버)
             ├── normalize-vectors.js      기존 임베딩 L2 정규화 일회성 마이그레이션 스크립트
             ├── memory-schema.sql         PostgreSQL 스키마 정의
             ├── migration-001-temporal.sql Temporal 스키마 마이그레이션 (valid_from/to/superseded_by)
-            └── migration-002-decay.sql   감쇠 멱등성 마이그레이션 (last_decay_at)
+            ├── migration-002-decay.sql   감쇠 멱등성 마이그레이션 (last_decay_at)
+            ├── migration-003-api-keys.sql API 키 관리 테이블 (api_keys, api_key_usage)
+            └── migration-004-key-isolation.sql fragments.key_id 컬럼 추가 (API 키 기반 기억 격리)
 ```
 
 나머지 모듈들은 이 핵심을 지원한다.
@@ -95,6 +97,9 @@ lib/
 ├── logger.js          Winston 로거 (daily rotate)
 ├── utils.js           Origin 검증, JSON 바디 파싱, SSE 출력
 └── path-validator.js  경로 검증
+
+lib/admin/
+└── ApiKeyStore.js     API 키 CRUD 및 인증 검증 (SHA-256 해시 저장, 원시 키 단 1회 반환)
 ```
 
 도구 구현은 `lib/tools/`에 분리되어 있다.
@@ -138,6 +143,7 @@ erDiagram
         timestamptz valid_to "Temporal 유효 종료 (NULL=현재)"
         text superseded_by "대체 파편 ID"
         timestamptz last_decay_at "마지막 감쇠 시각"
+        text key_id "API 키 격리 (NULL=마스터)"
     }
     fragment_links {
         bigserial id PK
@@ -188,6 +194,7 @@ erDiagram
 | valid_to | TIMESTAMPTZ | | Temporal 유효 구간 종료. NULL이면 현재 유효 파편 |
 | superseded_by | TEXT | | 이 파편을 대체한 파편의 ID |
 | last_decay_at | TIMESTAMPTZ | | 마지막 감쇠 적용 시각. NULL이면 accessed_at/created_at 기준으로 보정 |
+| key_id | TEXT | FK → api_keys.id, ON DELETE SET NULL | API 키 기반 기억 격리. NULL이면 마스터 키(MEMENTO_ACCESS_KEY)로 저장된 기억. 값이 있으면 해당 API 키로만 조회 가능 |
 
 인덱스 목록: content_hash(UNIQUE), topic(B-tree), type(B-tree), keywords(GIN), importance DESC(B-tree), created_at DESC(B-tree), agent_id(B-tree), linked_to(GIN), (ttl_tier, created_at)(B-tree), source(B-tree), verified_at(B-tree), is_anchor WHERE TRUE(부분 인덱스), valid_from(B-tree), (topic, type) WHERE valid_to IS NULL(부분 인덱스), id WHERE valid_to IS NULL(부분 UNIQUE).
 
@@ -266,6 +273,12 @@ CREATE POLICY fragment_isolation_policy ON agent_memory.fragments
 ```
 
 에이전트 ID가 일치하는 파편, `default` 에이전트의 파편(공용 데이터), `system`/`admin` 세션(유지보수용)에만 접근이 허용된다. 도구 핸들러는 쿼리 실행 직전 `SET LOCAL app.current_agent_id = $1`로 컨텍스트를 설정한다.
+
+### API 키 기반 기억 격리
+
+`key_id` 컬럼을 통해 API 키 단위의 추가 격리 레이어를 지원한다. 마스터 키(`MEMENTO_ACCESS_KEY`)로 접속한 요청이 저장한 파편은 `key_id = NULL`이며 마스터 키로만 조회 가능하다. DB에 발급된 API 키로 접속한 요청이 저장한 파편은 `key_id = <해당 키 ID>`로 기록되며 그 키만 조회할 수 있다.
+
+이 격리 모델은 다중 에이전트 환경에서 키 단위 메모리 파티셔닝을 구현한다. API 키는 Admin SPA(`/v1/internal/model/nothing`)에서 관리하며, 생성 시 원시 키(`mmcp_<slug>_<32 hex>`)는 응답에서 단 1회만 반환되고 DB에는 SHA-256 해시만 저장된다.
 
 ---
 
@@ -590,7 +603,7 @@ importanceWeight와 recencyWeight의 합은 1.0이어야 한다. halfLifeDays는
 
 | 변수 | 기본값 | 설명 |
 |------|--------|------|
-| PORT | 56332 | HTTP 리슨 포트 |
+| PORT | 57332 | HTTP 리슨 포트 |
 | MEMENTO_ACCESS_KEY | (없음) | Bearer 인증 키. 미설정 시 인증 비활성화 |
 | SESSION_TTL_MINUTES | 60 | 세션 유효 시간 (분) |
 | LOG_DIR | /var/log/mcp | Winston 로그 파일 저장 디렉토리 |
@@ -960,6 +973,14 @@ EMBEDDING_DIMENSIONS=768
 | GET | /.well-known/oauth-protected-resource | OAuth 2.0 보호 리소스 메타데이터 |
 | GET | /authorize | OAuth 2.0 인가 엔드포인트. PKCE code_challenge 필요 |
 | POST | /token | OAuth 2.0 토큰 엔드포인트. authorization_code 교환 |
+| GET | /v1/internal/model/nothing | Admin SPA. 마스터 키(MEMENTO_ACCESS_KEY) 인증 필요. API 키 관리 대시보드 |
+| POST | /v1/internal/model/nothing/auth | 마스터 키 검증 엔드포인트 |
+| GET | /v1/internal/model/nothing/stats | 대시보드 통계 (파편 수, API 호출량, 시스템 메트릭) |
+| GET | /v1/internal/model/nothing/activity | 최근 파편 활동 로그 (10건) |
+| GET | /v1/internal/model/nothing/keys | API 키 목록 조회 |
+| POST | /v1/internal/model/nothing/keys | API 키 생성. 원시 키는 응답에서 단 1회 반환 |
+| PUT | /v1/internal/model/nothing/keys/:id | API 키 상태 변경 (active ↔ inactive) |
+| DELETE | /v1/internal/model/nothing/keys/:id | API 키 삭제 |
 
 인증 방식은 두 가지다. Streamable HTTP는 `initialize` 요청 시 `Authorization: Bearer <MEMENTO_ACCESS_KEY>` 헤더로 인증하며 이후 세션으로 유지된다. Legacy SSE는 `/sse?accessKey=<MEMENTO_ACCESS_KEY>` 쿼리 파라미터로 인증한다.
 
@@ -992,8 +1013,10 @@ npm install
 psql -U $POSTGRES_USER -d $POSTGRES_DB -f lib/memory/memory-schema.sql
 
 # 기존 설치 업그레이드 시 마이그레이션 순서대로 실행
-psql $DATABASE_URL -f lib/memory/migration-001-temporal.sql   # Temporal 컬럼 추가
-psql $DATABASE_URL -f lib/memory/migration-002-decay.sql      # last_decay_at 컬럼 추가
+psql $DATABASE_URL -f lib/memory/migration-001-temporal.sql      # Temporal 컬럼 추가
+psql $DATABASE_URL -f lib/memory/migration-002-decay.sql         # last_decay_at 컬럼 추가
+psql $DATABASE_URL -f lib/memory/migration-003-api-keys.sql      # API 키 관리 테이블 추가
+psql $DATABASE_URL -f lib/memory/migration-004-key-isolation.sql # fragments.key_id 격리 컬럼 추가
 DATABASE_URL=$DATABASE_URL node lib/memory/normalize-vectors.js  # 임베딩 L2 정규화 (1회)
 
 # 서버 실행
@@ -1010,7 +1033,7 @@ Claude Code 연결 설정 예시 (`~/.claude/settings.json` 또는 프로젝트 
   "mcpServers": {
     "memento": {
       "type": "http",
-      "url": "http://localhost:56332/mcp",
+      "url": "http://localhost:57332/mcp",
       "headers": {
         "Authorization": "Bearer YOUR_MEMENTO_ACCESS_KEY"
       }

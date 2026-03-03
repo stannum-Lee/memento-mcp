@@ -103,6 +103,7 @@ erDiagram
         timestamptz valid_to "Temporal 종료"
         text superseded_by "대체 파편 ID"
         timestamptz last_decay_at "마지막 감쇠 시각"
+        text key_id "API 키 격리 (NULL=마스터)"
     }
     fragment_links {
         bigserial id PK
@@ -231,8 +232,10 @@ psql -U postgres -c "CREATE EXTENSION IF NOT EXISTS vector;"
 psql -U postgres -d memento -f lib/memory/memory-schema.sql
 
 # 기존 설치 업그레이드: 마이그레이션 순서대로 실행
-psql $DATABASE_URL -f lib/memory/migration-001-temporal.sql   # Temporal 컬럼 추가
-psql $DATABASE_URL -f lib/memory/migration-002-decay.sql      # last_decay_at 추가
+psql $DATABASE_URL -f lib/memory/migration-001-temporal.sql      # Temporal 컬럼 추가
+psql $DATABASE_URL -f lib/memory/migration-002-decay.sql         # last_decay_at 추가
+psql $DATABASE_URL -f lib/memory/migration-003-api-keys.sql      # API 키 관리 테이블 추가
+psql $DATABASE_URL -f lib/memory/migration-004-key-isolation.sql # fragments.key_id 격리 컬럼 추가
 DATABASE_URL=$DATABASE_URL node lib/memory/normalize-vectors.js  # 임베딩 L2 정규화 (1회)
 
 # 서버 실행
@@ -247,7 +250,7 @@ MCP 클라이언트 설정에 아래를 추가하면 된다.
 {
   "mcpServers": {
     "memento": {
-      "url": "http://localhost:56332/mcp",
+      "url": "http://localhost:57332/mcp",
       "headers": {
         "Authorization": "Bearer your-secret-key"
       }
