@@ -26,10 +26,11 @@ describe("SearchMetrics", () => {
             expect(stats.p99).toBe(42);
         });
 
-        it("100개 배열에서 P90은 90번째 값이다", () => {
+        it("100개 배열에서 P90은 index 90(값 91)이다", () => {
             const samples = Array.from({ length: 100 }, (_, i) => i + 1);
             const stats   = metrics.computePercentiles(samples);
-            expect(stats.p90).toBe(90);
+            // Math.floor(100 * 0.9) = 90 → sorted[90] = 91 (0-indexed)
+            expect(stats.p90).toBe(91);
         });
 
         it("count는 입력 배열 길이를 반환한다", () => {
