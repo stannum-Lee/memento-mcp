@@ -7,6 +7,15 @@
   "type": "module",
   "scripts": {
     "start": "node server.js",
+    "local:setup": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/setup_local_windows.ps1",
+    "local:start": "wscript //nologo scripts\\start_local_overlay_left.vbs",
+    "local:start:service": "wscript //nologo scripts\\start_local_background.vbs",
+    "local:start:console": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start_local_windows.ps1",
+    "local:stop": "wscript //nologo scripts\\stop_local_silent.vbs",
+    "local:stop:service": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/stop_local_windows.ps1",
+    "local:overlay": "wscript //nologo scripts\\start_local_overlay.vbs",
+    "local:overlay:left": "wscript //nologo scripts\\start_local_overlay_left.vbs",
+    "local:stop:silent": "wscript //nologo scripts\\stop_local_silent.vbs",
     "lint": "eslint .",
     "backfill:embeddings": "node lib/memory/backfill-embeddings.js"
   },

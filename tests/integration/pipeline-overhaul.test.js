@@ -180,8 +180,9 @@ describe("Pipeline Overhaul Integration", () => {
   describe("Backfill Script", () => {
     it("backfill-embeddings.js exists and is importable", async () => {
       const { stat } = await import("node:fs/promises");
-      const path = new URL("../../lib/memory/backfill-embeddings.js", import.meta.url).pathname;
-      const s = await stat(path);
+      const { fileURLToPath } = await import("node:url");
+      const filePath = fileURLToPath(new URL("../../lib/memory/backfill-embeddings.js", import.meta.url));
+      const s = await stat(filePath);
       assert.ok(s.isFile(), "backfill-embeddings.js should be a file");
     });
   });

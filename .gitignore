@@ -50,6 +50,7 @@ desktop.ini
 # Temporary files
 tmp/
 temp/
+.cache/
 
 # Private Documents (Patent, etc.)
 docs/private/

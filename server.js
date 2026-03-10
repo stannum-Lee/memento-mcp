@@ -20,7 +20,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname  = path.dirname(__filename);
 
 /** 설정 */
-import { PORT, ACCESS_KEY, SESSION_TTL_MS, LOG_DIR, RATE_LIMIT_WINDOW_MS, RATE_LIMIT_MAX_REQUESTS } from "./lib/config.js";
+import { PORT, ACCESS_KEY, SESSION_TTL_MS, LOG_DIR, RATE_LIMIT_WINDOW_MS, RATE_LIMIT_MAX_REQUESTS, REDIS_ENABLED } from "./lib/config.js";
 
 /** Rate Limiting */
 import { RateLimiter } from "./lib/rate-limiter.js";
@@ -117,7 +117,9 @@ const server               = http.createServer(async (req, res) => {
 
     // Redis 연결 확인
     try {
-      if (redisClient && redisClient.status === "ready") {
+      if (!REDIS_ENABLED) {
+        health.checks.redis = { status: "disabled" };
+      } else if (redisClient && redisClient.status === "ready") {
         health.checks.redis = { status: "up" };
       } else {
         health.checks.redis = { status: "down", error: "Not connected" };
@@ -281,46 +283,11 @@ const server               = http.createServer(async (req, res) => {
    * Streamable HTTP: GET /mcp
    * ======================================== */
   if (req.method === "GET" && url.pathname === "/mcp") {
-    res.setHeader("Access-Control-Allow-Origin", req.headers.origin || "*");
-    res.setHeader("Access-Control-Expose-Headers", "MCP-Session-Id");
-
-    const sessionId          = req.headers["mcp-session-id"] || url.searchParams.get("sessionId") || url.searchParams.get("mcp-session-id");
-
-    if (!sessionId) {
-      res.statusCode       = 400;
-      res.end("Missing session ID");
-      return;
-    }
-
-    const validation         = await validateStreamableSession(sessionId);
-
-    if (!validation.valid) {
-      res.statusCode       = 400;
-      res.end(validation.reason);
-      return;
-    }
-
-    const session            = validation.session;
-
-    if (!session.authenticated) {
-      res.statusCode       = 401;
-      res.end("Unauthorized");
-      return;
-    }
-
-    res.statusCode         = 200;
-    res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
-    res.setHeader("Cache-Control", "no-cache, no-transform");
-    res.setHeader("Connection", "keep-alive");
-    res.setHeader("MCP-Session-Id", sessionId);
-
-    session.setSseResponse(res);
-
-    req.on("close", () => {
-      console.log(`[Streamable] SSE closed for session: ${sessionId}`);
-      session.setSseResponse(null);
-    });
-
+    // We operate in JSON response mode for streamable HTTP.
+    // GET/SSE is optional in the MCP spec and returning 405 is valid.
+    res.statusCode         = 405;
+    res.setHeader("Allow", "POST");
+    res.end("Method Not Allowed");
     return;
   }
 
