@@ -121,6 +121,9 @@ function Invoke-Psql {
 }
 
 $envMap = Get-EnvMap -Path $envPath
+$env:PGPASSWORD = $envMap["POSTGRES_PASSWORD"]
+$env:PGGSSENCMODE = "disable"
+$env:PGSSLMODE = "disable"
 $shouldStartRedis = if ($NoRedis) {
   $false
 } elseif ($PSBoundParameters.ContainsKey("StartRedis")) {
@@ -189,8 +192,6 @@ if (-not (Test-Path (Join-Path $pgData "PG_VERSION"))) {
     Remove-Item $pwFile -Force -ErrorAction SilentlyContinue
   }
 }
-
-$env:PGPASSWORD = $envMap["POSTGRES_PASSWORD"]
 
 if (-not (Test-TcpPort -HostName $envMap["POSTGRES_HOST"] -Port ([int]$envMap["POSTGRES_PORT"]))) {
   & $pgCtl `
@@ -307,4 +308,3 @@ if ($StartServer) {
 }
 
 exit 0
-

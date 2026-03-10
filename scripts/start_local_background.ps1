@@ -123,7 +123,6 @@ function Wait-ForPostgresQuery {
   )
 
   $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
-  $env:PGPASSWORD = $EnvMap["POSTGRES_PASSWORD"]
 
   while ((Get-Date) -lt $deadline) {
     & $PsqlPath `
@@ -149,6 +148,9 @@ trap {
 }
 
 $envMap = Get-EnvMap -Path $envPath
+$env:PGPASSWORD = $envMap["POSTGRES_PASSWORD"]
+$env:PGGSSENCMODE = "disable"
+$env:PGSSLMODE = "disable"
 Write-BootstrapLog "start requested"
 
 $pgHost = $envMap["POSTGRES_HOST"]
