@@ -266,6 +266,17 @@ if ($currentColType.Trim() -ne $targetColType) {
   )
 }
 
+$postSchemaSqlFiles = @(
+  "lib\\memory\\migration-007-link-weight.sql",
+  "lib\\memory\\migration-008-morpheme-dict.sql",
+  "lib\\memory\\migration-009-co-retrieved.sql",
+  "lib\\memory\\migration-010-ema-activation.sql"
+)
+
+foreach ($sqlFile in $postSchemaSqlFiles) {
+  Invoke-Psql -PsqlPath $psql -EnvMap $envMap -Database $envMap["POSTGRES_DB"] -Args @("-f", (Join-Path $repoRoot $sqlFile))
+}
+
 if ($shouldStartRedis) {
   if (-not (Test-Path $redisExe)) {
     throw "Redis portable runtime not found: $redisExe"

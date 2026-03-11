@@ -100,12 +100,14 @@ echo "  1) openai   (text-embedding-3-small, 1536 dims)"
 echo "  2) gemini   (gemini-embedding-001, 3072 dims)"
 echo "  3) ollama   (local, nomic-embed-text)"
 echo "  4) localai  (local OpenAI-compatible)"
-echo "  5) custom   (manual configuration)"
-echo "  6) none     (disable semantic search)"
+echo "  5) transformers (local Hugging Face, Xenova/bge-m3)"
+echo "  6) custom   (manual configuration)"
+echo "  7) none     (disable semantic search)"
 EMBED_CHOICE=$(ask "Choice" "1")
 
 EMBEDDING_PROVIDER=""; EMBEDDING_API_KEY=""; EMBEDDING_MODEL=""
 EMBEDDING_DIMENSIONS=""; EMBEDDING_BASE_URL=""
+MEMENTO_TRANSFORMERS_CACHE=""
 
 case "$EMBED_CHOICE" in
   1)
@@ -132,13 +134,20 @@ case "$EMBED_CHOICE" in
     EMBEDDING_DIMENSIONS=$(ask "Dimensions" "1536")
     ;;
   5)
+    EMBEDDING_PROVIDER="transformers"
+    EMBEDDING_MODEL=$(ask "Model" "Xenova/bge-m3")
+    EMBEDDING_DIMENSIONS=$(ask "Dimensions" "1024")
+    MEMENTO_TRANSFORMERS_CACHE=$(ask "Transformers cache dir (leave blank for .cache/transformers)" "")
+    warn "Local transformers uses CPU/ONNX Runtime and may download model files on first use."
+    ;;
+  6)
     EMBEDDING_PROVIDER="custom"
     EMBEDDING_BASE_URL=$(ask "Base URL (e.g. http://localhost:8080/v1)")
     EMBEDDING_API_KEY=$(ask_secret "API Key")
     EMBEDDING_MODEL=$(ask "Model name")
     EMBEDDING_DIMENSIONS=$(ask "Dimensions")
     ;;
-  6)
+  7)
     EMBEDDING_PROVIDER=""
     ;;
 esac
@@ -206,6 +215,8 @@ EOF
     echo "OPENAI_API_KEY=${EMBEDDING_API_KEY}" >> "$ENV_FILE"
   elif [[ "$EMBEDDING_PROVIDER" == "gemini" ]]; then
     echo "GEMINI_API_KEY=${EMBEDDING_API_KEY}" >> "$ENV_FILE"
+  elif [[ "$EMBEDDING_PROVIDER" == "transformers" ]]; then
+    [[ -n "$MEMENTO_TRANSFORMERS_CACHE" ]] && echo "MEMENTO_TRANSFORMERS_CACHE=${MEMENTO_TRANSFORMERS_CACHE}" >> "$ENV_FILE"
   elif [[ "$EMBEDDING_PROVIDER" == "custom" ]]; then
     echo "EMBEDDING_BASE_URL=${EMBEDDING_BASE_URL}" >> "$ENV_FILE"
     echo "EMBEDDING_API_KEY=${EMBEDDING_API_KEY}" >> "$ENV_FILE"
@@ -242,7 +253,7 @@ if ask_yn "Apply PostgreSQL schema?" "y"; then
     success "Schema applied."
   else
     info "Running migrations..."
-    for i in 001 002 003 004 005 006; do
+    for i in 001 002 003 004 005 006 007 008 009 010; do
       f="lib/memory/migration-${i}-"*".sql"
       if compgen -G "$f" > /dev/null; then
         psql "$DATABASE_URL" -f $f && success "migration-${i} done." || warn "migration-${i} failed (may already be applied)."
@@ -250,8 +261,8 @@ if ask_yn "Apply PostgreSQL schema?" "y"; then
     done
   fi
 
-  if [[ -n "$EMBEDDING_PROVIDER" ]] && [[ "${EMBEDDING_DIMENSIONS:-0}" -gt 2000 ]]; then
-    warn "Dimensions ${EMBEDDING_DIMENSIONS} > 2000 -- migration-007 required."
+  if [[ -n "$EMBEDDING_PROVIDER" ]] && [[ "${EMBEDDING_DIMENSIONS:-1536}" != "1536" ]]; then
+    warn "Dimensions ${EMBEDDING_DIMENSIONS} != 1536 -- migration-007 required."
     if ask_yn "Run migration-007?" "y"; then
       EMBEDDING_DIMENSIONS="$EMBEDDING_DIMENSIONS" DATABASE_URL="$DATABASE_URL" \
         node lib/memory/migration-007-flexible-embedding-dims.js

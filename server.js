@@ -283,11 +283,46 @@ const server               = http.createServer(async (req, res) => {
    * Streamable HTTP: GET /mcp
    * ======================================== */
   if (req.method === "GET" && url.pathname === "/mcp") {
-    // We operate in JSON response mode for streamable HTTP.
-    // GET/SSE is optional in the MCP spec and returning 405 is valid.
-    res.statusCode         = 405;
-    res.setHeader("Allow", "POST");
-    res.end("Method Not Allowed");
+    res.setHeader("Access-Control-Allow-Origin", req.headers.origin || "*");
+    res.setHeader("Access-Control-Expose-Headers", "MCP-Session-Id");
+
+    const sessionId          = req.headers["mcp-session-id"] || url.searchParams.get("sessionId") || url.searchParams.get("mcp-session-id");
+
+    if (!sessionId) {
+      res.statusCode       = 400;
+      res.end("Missing session ID");
+      return;
+    }
+
+    const validation         = await validateStreamableSession(sessionId);
+
+    if (!validation.valid) {
+      res.statusCode       = 400;
+      res.end(validation.reason);
+      return;
+    }
+
+    const session            = validation.session;
+
+    if (!session.authenticated) {
+      res.statusCode       = 401;
+      res.end("Unauthorized");
+      return;
+    }
+
+    res.statusCode         = 200;
+    res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+    res.setHeader("Cache-Control", "no-cache, no-transform");
+    res.setHeader("Connection", "keep-alive");
+    res.setHeader("MCP-Session-Id", sessionId);
+
+    session.setSseResponse(res);
+
+    req.on("close", () => {
+      console.log(`[Streamable] SSE closed for session: ${sessionId}`);
+      session.setSseResponse(null);
+    });
+
     return;
   }
 
