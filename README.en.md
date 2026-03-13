@@ -185,7 +185,7 @@ The system decomposes into three structural layers: the HTTP transport layer, th
 - **Streamable HTTP** (MCP specification §2025-03-26 and later): `POST /mcp` receives JSON-RPC 2.0 request bodies; `GET /mcp` establishes a server-sent event stream for server-initiated pushes; `DELETE /mcp` terminates sessions explicitly.
 - **Legacy SSE** (MCP specification §2024-11-05): `GET /sse` creates a session and opens the SSE stream; `POST /message?sessionId=<id>` receives JSON-RPC requests whose responses are delivered over the SSE channel.
 
-Operational endpoints: `GET /health` returns structured health status for Redis connectivity, PostgreSQL query execution (`SELECT 1`), and active session counts; `GET /metrics` serves Prometheus-compatible metrics collected via `prom-client`.
+Operational endpoints: `GET /health` returns structured health status for PostgreSQL query execution (`SELECT 1`), Redis connectivity, and active session counts. When `REDIS_ENABLED=false`, Redis reports `{ status: "disabled" }` without triggering degraded mode. `GET /metrics` serves Prometheus-compatible metrics collected via `prom-client`.
 
 OAuth 2.0 endpoints: `GET /.well-known/oauth-authorization-server`, `GET /.well-known/oauth-protected-resource`, `GET /authorize`, `POST /token`. PKCE (`code_challenge` / `code_verifier`) is required for the authorization code flow.
 
@@ -435,7 +435,7 @@ The isolation context is set per-transaction via `SET LOCAL app.current_agent_id
 
 The `key_id` column provides an additional isolation layer orthogonal to the agent-level RLS policy. Fragments stored via the master key (`MEMENTO_ACCESS_KEY`) carry `key_id = NULL` and are accessible only to master key requests. Fragments stored by a provisioned DB API key carry `key_id = <key UUID>` and are visible only to requests authenticated with that specific key.
 
-This model enables per-key memory partitioning in multi-tenant or multi-agent deployments. API keys are provisioned and managed through the Admin SPA at `/v1/internal/model/nothing` (master key authentication required). The raw key (`mmcp_<slug>_<32 hex chars>`) is returned exactly once on creation and is never stored; the database retains only the SHA-256 hash. Key status, daily rate limits, and usage statistics are tracked in the `api_keys` and `api_key_usage` tables created by migration-003.
+This model enables per-key memory partitioning in multi-tenant or multi-agent deployments. API keys are provisioned and managed through the Admin SPA at `/v1/internal/model/nothing`. The SPA shell (HTML and images) is served without authentication to allow the login form to render; all data API endpoints under the same prefix require master key authentication. The raw key (`mmcp_<slug>_<32 hex chars>`) is returned exactly once on creation and is never stored; the database retains only the SHA-256 hash. Key status, daily rate limits, and usage statistics are tracked in the `api_keys` and `api_key_usage` tables created by migration-003.
 
 ---
 
@@ -929,7 +929,10 @@ The system is designed to degrade gracefully rather than fail hard when external
 
 ### 9.1 Redis Unavailability
 
-When the Redis client is not connected or returns an error:
+When `REDIS_ENABLED=false` (the default for minimal installations), Redis is not connected and the `/health` endpoint reports `redis.status: "disabled"` with HTTP 200 — this is not considered a degraded state.
+
+When `REDIS_ENABLED=true` but the Redis client is not connected or returns an error:
+- The `/health` endpoint reports `redis.status: "down"` and returns HTTP 503.
 - **L1 retrieval** is skipped entirely; `recall` proceeds directly to L2.
 - **Working Memory writes** (`scope: "session"`) fail silently or throw; session-scoped fragments are not persisted.
 - **MemoryEvaluator** cannot dequeue jobs; the worker enters its sleep interval and retries on the next polling cycle.
@@ -1425,13 +1428,13 @@ See **[INSTALL.en.md](INSTALL.en.md)** for full installation, migration, client 
 | `DELETE` | `/mcp` | Streamable HTTP: terminate session |
 | `GET` | `/sse` | Legacy SSE: create session (`accessKey` query parameter) |
 | `POST` | `/message?sessionId=` | Legacy SSE: receive JSON-RPC 2.0 request |
-| `GET` | `/health` | Health check: Redis, PostgreSQL, session counts; HTTP 503 on degraded |
+| `GET` | `/health` | Health check: PostgreSQL, Redis, session counts. Redis disabled → 200; DB or Redis (when enabled) down → 503 |
 | `GET` | `/metrics` | Prometheus metrics (prom-client) |
 | `GET` | `/.well-known/oauth-authorization-server` | OAuth 2.0 authorization server metadata |
 | `GET` | `/.well-known/oauth-protected-resource` | OAuth 2.0 protected resource metadata |
 | `GET` | `/authorize` | OAuth 2.0 authorization endpoint (PKCE required) |
 | `POST` | `/token` | OAuth 2.0 token endpoint (authorization code exchange) |
-| `GET` | `/v1/internal/model/nothing` | Admin SPA. Master key (`MEMENTO_ACCESS_KEY`) authentication required. API key management dashboard. |
+| `GET` | `/v1/internal/model/nothing` | Admin SPA. Serves static HTML with login form (no authentication). Data API endpoints require master key. |
 | `POST` | `/v1/internal/model/nothing/auth` | Master key verification endpoint |
 | `GET` | `/v1/internal/model/nothing/stats` | Dashboard statistics (fragment count, API call volume, system metrics) |
 | `GET` | `/v1/internal/model/nothing/activity` | Recent fragment activity log (last 10 entries) |

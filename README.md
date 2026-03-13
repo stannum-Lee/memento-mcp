@@ -1167,13 +1167,13 @@ EMBEDDING_DIMENSIONS=768
 | DELETE | /mcp | Streamable HTTP. 세션 명시적 종료 |
 | GET | /sse | Legacy SSE. 세션 생성. `accessKey` 쿼리 파라미터로 인증 |
 | POST | /message?sessionId= | Legacy SSE. JSON-RPC 요청 수신. 응답은 SSE 스트림으로 전달 |
-| GET | /health | 헬스 체크. Redis 연결, DB 쿼리(SELECT 1), 세션 상태를 확인하고 JSON으로 반환 |
+| GET | /health | 헬스 체크. DB 쿼리(SELECT 1), 세션 상태, Redis 연결을 확인하고 JSON으로 반환. `REDIS_ENABLED=false` 시 Redis는 `disabled`로 표시되며 200 반환. DB 장애 시 503 |
 | GET | /metrics | Prometheus 메트릭. prom-client가 수집한 HTTP 요청 카운터, 세션 게이지 등 |
 | GET | /.well-known/oauth-authorization-server | OAuth 2.0 인가 서버 메타데이터 |
 | GET | /.well-known/oauth-protected-resource | OAuth 2.0 보호 리소스 메타데이터 |
 | GET | /authorize | OAuth 2.0 인가 엔드포인트. PKCE code_challenge 필요 |
 | POST | /token | OAuth 2.0 토큰 엔드포인트. authorization_code 교환 |
-| GET | /v1/internal/model/nothing | Admin SPA. 마스터 키(MEMENTO_ACCESS_KEY) 인증 필요. API 키 관리 대시보드 |
+| GET | /v1/internal/model/nothing | Admin SPA. 로그인 폼을 포함한 정적 HTML 제공(인증 불필요). 데이터 API는 마스터 키 인증 필요 |
 | POST | /v1/internal/model/nothing/auth | 마스터 키 검증 엔드포인트 |
 | GET | /v1/internal/model/nothing/stats | 대시보드 통계 (파편 수, API 호출량, 시스템 메트릭) |
 | GET | /v1/internal/model/nothing/activity | 최근 파편 활동 로그 (10건) |
