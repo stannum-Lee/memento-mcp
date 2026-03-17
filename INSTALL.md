@@ -64,6 +64,7 @@ psql $DATABASE_URL -f lib/memory/migration-008-morpheme-dict.sql # 형태소 사
 psql $DATABASE_URL -f lib/memory/migration-009-co-retrieved.sql  # co_retrieved 링크 타입 추가
 psql $DATABASE_URL -f lib/memory/migration-010-ema-activation.sql # EMA 활성화 컬럼 추가
 psql $DATABASE_URL -f lib/memory/migration-011-key-groups.sql      # API 키 그룹
+psql $DATABASE_URL -f lib/memory/migration-012-quality-verified.sql # quality_verified 컬럼 추가
 ```
 
 > **v1.1.0 이전에서 업그레이드하는 경우**: migration-006 미실행 시 `amend`, `memory_consolidate`, GraphLinker 자동 관계 생성에서 DB 제약 에러가 발생한다(`superseded_by` INSERT 실패). 기존 DB를 유지하며 업그레이드할 때 반드시 실행해야 한다.
@@ -75,9 +76,9 @@ psql $DATABASE_URL -f lib/memory/migration-011-key-groups.sql      # API 키 그
 ```bash
 # 기본 임베딩(1536차원) 사용 시: migration-007 불필요
 # 2000차원 초과 모델(Gemini gemini-embedding-001 등) 사용 시:
-# EMBEDDING_DIMENSIONS=3072 DATABASE_URL=$DATABASE_URL node lib/memory/migration-007-flexible-embedding-dims.js
+# EMBEDDING_DIMENSIONS=3072 DATABASE_URL=$DATABASE_URL node scripts/migration-007-flexible-embedding-dims.js
 
-DATABASE_URL=$DATABASE_URL node lib/memory/normalize-vectors.js  # 임베딩 L2 정규화 (1회)
+DATABASE_URL=$DATABASE_URL node scripts/normalize-vectors.js  # 임베딩 L2 정규화 (1회)
 
 # 기존 파편 임베딩 백필 (임베딩 API 키 필요, 1회성)
 npm run backfill:embeddings

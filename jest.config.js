@@ -10,8 +10,7 @@ export default {
         "/node_modules/",
         "/.worktrees/",
         "/tests/integration/",
-        "/tests/e2e/",
-        "/tests/unit/"
+        "/tests/e2e/"
       ]
     },
     {
