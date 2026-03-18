@@ -19,7 +19,6 @@
     "backfill:embeddings": "node scripts/backfill-embeddings.js"
   },
   "dependencies": {
-    "@huggingface/transformers": "^3.8.1",
     "@modelcontextprotocol/sdk": "^1.27.1",
     "ioredis": "^5.9.3",
     "js-tiktoken": "^1.0.21",
