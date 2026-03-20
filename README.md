@@ -558,6 +558,7 @@ stale 기준(일): procedure=30, fact=60, decision=90, default=60. `config/memor
 | threshold | number | L3 코사인 유사도 하한 (0.0~1.0). 이 값 미만의 벡터 검색 결과 제외 |
 | asOf | string | ISO 8601 날짜시간 (예: "2026-01-15T00:00:00Z"). anchorTime으로 변환되어 해당 시점 근접 파편이 우선 배치된다 |
 | includeSuperseded | boolean | true 시 valid_to가 설정된(만료된) 파편도 포함. 기본 false — superseded_by로 대체된 파편은 기본적으로 검색에서 제외된다 |
+| excludeSeen | boolean | true(기본)이면 같은 세션의 직전 context() 호출에서 주입된 파편을 결과에서 제외한다. 중복 주입 방지용 |
 | cursor | string | 페이지네이션 커서. 이전 결과의 nextCursor 값을 전달하면 다음 페이지 반환 |
 | pageSize | number | 페이지 크기. 기본 20, 최대 50 |
 | agentId | string | 에이전트 ID |
@@ -1247,6 +1248,16 @@ EMBEDDING_DIMENSIONS=768
 | PUT | /v1/internal/model/nothing/keys/:id | API 키 상태 변경 (active ↔ inactive) |
 | DELETE | /v1/internal/model/nothing/keys/:id | API 키 삭제 |
 
+### /health 엔드포인트 정책
+
+| 의존성 | 분류 | down 시 응답 |
+|--------|------|-------------|
+| PostgreSQL | 필수 | 503 (degraded) |
+| Redis | 선택 | 200 (healthy, warnings 포함) |
+
+Redis가 비활성화(`REDIS_ENABLED=false`)되거나 연결 실패해도 서버는 healthy(200)를 반환합니다.
+L1 캐시와 Working Memory가 비활성화되지만 핵심 기억 저장/검색은 PostgreSQL만으로 동작합니다.
+
 인증 방식은 두 가지다. Streamable HTTP는 `initialize` 요청 시 `Authorization: Bearer <MEMENTO_ACCESS_KEY>` 헤더로 인증하며 이후 세션으로 유지된다. Legacy SSE는 `/sse?accessKey=<MEMENTO_ACCESS_KEY>` 쿼리 파라미터로 인증한다.
 
 ---
@@ -1275,8 +1286,8 @@ npm test          # Jest + unit + integration 순차 실행
 개별 실행:
 ```bash
 npm run test:jest        # Jest — tests/*.test.js
-npm run test:unit        # node:test — tests/unit/*.test.js
-npm run test:integration # node:test — tests/integration/*.test.js
+npm run test:unit:node   # node:test — tests/unit/*.test.js
+npm run test:integration # node:test — tests/integration/*.test.js + tests/e2e/*.test.js
 ```
 
 ### E2E 테스트 (PostgreSQL 필요)
