@@ -32,6 +32,7 @@ import {
 import { saveAccessStats } from "./lib/tools/index.js";
 import { shutdownPool } from "./lib/tools/db.js";
 import { getMemoryEvaluator } from "./lib/memory/MemoryEvaluator.js";
+import { validateSchemaCapabilities } from "./lib/schema-preflight.js";
 
 /** 메트릭 */
 import { recordHttpRequest } from "./lib/metrics.js";
@@ -180,23 +181,27 @@ const server = http.createServer(async (req, res) => {
   recordHttpRequest(req.method, url.pathname, 404, duration);
 });
 
-server.listen(PORT, () => {
-  console.log(`Memento MCP HTTP server listening on port ${PORT}`);
-  console.log("Streamable HTTP endpoints: POST/GET/DELETE /mcp");
-  console.log("Legacy SSE endpoints: GET /sse, POST /message");
+async function boot() {
+  await validateSchemaCapabilities();
 
-  if (ACCESS_KEY) {
-    console.log("Authentication: ENABLED");
-  } else {
-    console.log("Authentication: DISABLED (set MEMENTO_ACCESS_KEY to enable)");
-  }
+  server.listen(PORT, () => {
+    console.log(`Memento MCP HTTP server listening on port ${PORT}`);
+    console.log("Streamable HTTP endpoints: POST/GET/DELETE /mcp");
+    console.log("Legacy SSE endpoints: GET /sse, POST /message");
 
-  console.log(`Session TTL: ${SESSION_TTL_MS / 60000} minutes`);
+    if (ACCESS_KEY) {
+      console.log("Authentication: ENABLED");
+    } else {
+      console.log("Authentication: DISABLED (set MEMENTO_ACCESS_KEY to enable)");
+    }
 
-  const embeddingWorkerRef = { current: null };
-  startSchedulers({ globalEmbeddingWorkerRef: embeddingWorkerRef });
-  globalEmbeddingWorker = embeddingWorkerRef.current;
-});
+    console.log(`Session TTL: ${SESSION_TTL_MS / 60000} minutes`);
+
+    const embeddingWorkerRef = { current: null };
+    startSchedulers({ globalEmbeddingWorkerRef: embeddingWorkerRef });
+    globalEmbeddingWorker = embeddingWorkerRef.current;
+  });
+}
 
 /**
  * Graceful Shutdown
@@ -231,3 +236,9 @@ async function gracefulShutdown(signal) {
 
 process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
 process.on("SIGINT", () => gracefulShutdown("SIGINT"));
+
+boot().catch((error) => {
+  console.error("[Startup] Schema capability preflight failed");
+  console.error(error?.stack || String(error));
+  process.exit(1);
+});
