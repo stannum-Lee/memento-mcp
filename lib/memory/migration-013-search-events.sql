@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS agent_memory.search_events (
     result_count   SMALLINT     NOT NULL DEFAULT 0,
     l1_is_fallback BOOLEAN      NOT NULL DEFAULT FALSE,
     used_rrf       BOOLEAN      NOT NULL DEFAULT FALSE,
-    latency_ms     SMALLINT,
+    latency_ms     INTEGER,
     query_type     TEXT         CHECK (query_type IN ('keywords', 'text', 'topic', 'mixed')),
     filter_keys    TEXT[],
     created_at     TIMESTAMPTZ  NOT NULL DEFAULT NOW()
