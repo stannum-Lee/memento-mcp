@@ -6,7 +6,9 @@ describe("reflectionPolicy config", () => {
   test("reflectionPolicy 설정이 존재한다", () => {
     const p = MEMORY_CONFIG.reflectionPolicy;
     assert.ok(p, "reflectionPolicy 필수");
-    assert.strictEqual(p.maxAgeDays, 30);
-    assert.strictEqual(p.keepPerType, 5);
+    assert.strictEqual(p.maxAgeDays, 7);
+    assert.strictEqual(p.keepPerType, 2);
+    assert.strictEqual(p.excessAgeHours, 24);
+    assert.strictEqual(p.excessImportance, 0.45);
   });
 });

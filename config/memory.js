@@ -71,10 +71,12 @@ export const MEMORY_CONFIG = {
   },
   /** session_reflect 파편 정리 정책 */
   reflectionPolicy: {
-    maxAgeDays       : 30,
-    maxImportance    : 0.3,
-    keepPerType      : 5,
-    maxDeletePerCycle: 30
+    maxAgeDays       : 7,
+    maxImportance    : 0.2,
+    keepPerType      : 2,
+    excessAgeHours   : 24,
+    excessImportance : 0.45,
+    maxDeletePerCycle: 250
   },
   /** 시맨틱 검색 설정 */
   semanticSearch: {
@@ -114,5 +116,38 @@ export const MEMORY_CONFIG = {
     geminiRetryLimit  : 3,        // 형태소 분리 Gemini 재시도 횟수
     geminiRetryDelayMs: 1_500,    // 형태소 분리 Gemini 재시도 간격
     registerOnRemember: true      // remember() 시 형태소 자동 등록 여부
+  },
+  noiseFilters: {
+    syntheticTopicPatterns: [
+      "^memento-e2e-",
+      "^memento-advanced-",
+      "^advanced-check-"
+    ],
+    idHeavyTopicPatterns: [
+      "^session_reflect$",
+      "^contradiction$"
+    ],
+    diffContentPatterns: [
+      "\\b\\d+\\s+files?\\s+changed\\b",
+      "\\b\\d+\\s+insertions?\\s*\\(\\+\\)",
+      "\\b\\d+\\s+deletions?\\s*\\(-\\)",
+      "\\bgit\\s+diff\\b",
+      "^@@"
+    ],
+    diffStopwords: [
+      "diff",
+      "patch",
+      "hunk",
+      "file",
+      "files",
+      "changed",
+      "insertion",
+      "insertions",
+      "deletion",
+      "deletions"
+    ],
+    repeatedResolutionMin: 2,
+    idTokenMinDigits    : 4,
+    maxTokenLength      : 40
   }
 };
