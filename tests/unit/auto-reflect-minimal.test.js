@@ -1,0 +1,73 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { autoReflect } from "../../lib/memory/AutoReflect.js";
+import { SessionActivityTracker } from "../../lib/memory/SessionActivityTracker.js";
+import { MemoryManager } from "../../lib/memory/MemoryManager.js";
+
+const originalGetActivity = SessionActivityTracker.getActivity;
+const originalMarkReflected = SessionActivityTracker.markReflected;
+const originalGetInstance = MemoryManager.getInstance;
+
+test.afterEach(() => {
+  SessionActivityTracker.getActivity = originalGetActivity;
+  SessionActivityTracker.markReflected = originalMarkReflected;
+  MemoryManager.getInstance = originalGetInstance;
+});
+
+test("autoReflect skips minimal reflect when only noisy keywords exist", async () => {
+  let marked = 0;
+  let reflectCalled = 0;
+
+  SessionActivityTracker.getActivity = async () => ({
+    reflected: false,
+    toolCalls: { recall: 2 },
+    keywords: ["files", "changed", "deadbeefcafebabe"],
+    fragments: [],
+    startedAt: new Date().toISOString(),
+    lastActivity: new Date().toISOString()
+  });
+  SessionActivityTracker.markReflected = async () => { marked += 1; };
+  MemoryManager.getInstance = () => ({
+    reflect: async () => {
+      reflectCalled += 1;
+      return { count: 99 };
+    }
+  });
+
+  const result = await autoReflect("auto-reflect-noise-session", "test");
+
+  assert.equal(reflectCalled, 0);
+  assert.equal(marked, 1);
+  assert.equal(result.count, 0);
+  assert.equal(result.breakdown.skipped, true);
+});
+
+test("autoReflect persists minimal reflect when durable keywords remain", async () => {
+  let marked = 0;
+  let reflectArgs = null;
+
+  SessionActivityTracker.getActivity = async () => ({
+    reflected: false,
+    toolCalls: { remember: 1, recall: 1 },
+    keywords: ["trrc", "preset", "files"],
+    fragments: [],
+    startedAt: new Date().toISOString(),
+    lastActivity: new Date().toISOString()
+  });
+  SessionActivityTracker.markReflected = async () => { marked += 1; };
+  MemoryManager.getInstance = () => ({
+    reflect: async (args) => {
+      reflectArgs = args;
+      return { count: 1, fragments: [{ id: "frag-1" }], breakdown: { summary: 1 } };
+    }
+  });
+
+  const result = await autoReflect("auto-reflect-durable-session", "test");
+
+  assert.equal(marked, 1);
+  assert.equal(result.count, 1);
+  assert.equal(reflectArgs.sessionId, "auto-reflect-durable-session");
+  assert.equal(reflectArgs.agentId, "test");
+  assert.match(reflectArgs.summary, /trrc/);
+  assert.match(reflectArgs.summary, /preset/);
+});
