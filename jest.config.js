@@ -4,7 +4,8 @@ export default {
       displayName: "unit",
       testEnvironment: "node",
       testMatch: [
-        "<rootDir>/tests/*.test.js"
+        "<rootDir>/tests/*.test.js",
+        "<rootDir>/tests/unit/search-event-*.test.js"
       ],
       testPathIgnorePatterns: [
         "/node_modules/",

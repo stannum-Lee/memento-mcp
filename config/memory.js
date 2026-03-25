@@ -111,6 +111,8 @@ export const MEMORY_CONFIG = {
     minSimilarity     : 0.15,     // fallback 최소 유사도 (L3보다 낮게 설정)
     maxMorphemes      : 10,       // 쿼리에서 추출할 최대 형태소 수
     geminiTimeoutMs   : 15_000,   // 형태소 분리 Gemini 타임아웃
+    geminiRetryLimit  : 3,        // 형태소 분리 Gemini 재시도 횟수
+    geminiRetryDelayMs: 1_500,    // 형태소 분리 Gemini 재시도 간격
     registerOnRemember: true      // remember() 시 형태소 자동 등록 여부
   }
 };

@@ -1,6 +1,6 @@
 {
   "name": "memento-mcp",
-  "version": "1.6.0",
+  "version": "1.6.1",
   "license": "Apache-2.0",
   "description": "Fragment-Based Memory MCP Server",
   "main": "server.js",
@@ -9,13 +9,15 @@
     "start": "node --env-file=.env server.js",
     "test": "npm run test:jest && npm run test:unit:node",
     "test:jest": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --selectProjects unit",
-    "test:unit:node": "node --test tests/unit/*.test.js",
+    "test:unit:node": "node scripts/run-node-unit-tests.js",
     "test:integration": "node --test tests/integration/*.test.js tests/e2e/*.test.js",
     "test:e2e": "node --test tests/e2e/*.test.js",
     "test:e2e:local": "bash scripts/run-e2e-tests.sh",
     "test:ci": "npm test && npm run test:e2e",
     "lint": "eslint . --max-warnings 0",
-    "backfill:embeddings": "node scripts/backfill-embeddings.js"
+    "backfill:embeddings": "node --env-file=.env scripts/backfill-embeddings.js",
+    "migrate:sql": "node scripts/run-sql-migration.js",
+    "reembed:all": "node --env-file=.env scripts/reembed-all.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.1",

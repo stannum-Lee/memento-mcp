@@ -18,9 +18,57 @@
 import { getPrimaryPool } from "../lib/tools/db.js";
 import { EMBEDDING_DIMENSIONS } from "../lib/config.js";
 
-const SCHEMA     = "agent_memory";
-const TABLE      = "fragments";
-const INDEX_NAME = "idx_frag_embedding";
+const SCHEMA = "agent_memory";
+const TARGETS = [
+  { table: "fragments", indexName: "idx_frag_embedding" },
+  { table: "morpheme_dict", indexName: "idx_morpheme_dict_embedding" }
+];
+
+async function migrateEmbeddingColumn(pool, { table, indexName }, colType, opsType) {
+  const { rows } = await pool.query(
+    `SELECT pg_catalog.format_type(a.atttypid, a.atttypmod) AS full_type
+       FROM pg_attribute a
+       JOIN pg_class c ON a.attrelid = c.oid
+       JOIN pg_namespace n ON c.relnamespace = n.oid
+      WHERE n.nspname = $1
+        AND c.relname = $2
+        AND a.attname = 'embedding'
+        AND a.attnum > 0
+        AND NOT a.attisdropped`,
+    [SCHEMA, table]
+  );
+
+  if (rows.length === 0) {
+    console.error(`컬럼 ${SCHEMA}.${table}.embedding 을 찾을 수 없습니다.`);
+    process.exit(1);
+  }
+
+  const currentType = rows[0].full_type;
+  console.log(`[${table}] 현재 컬럼 타입: ${currentType}`);
+
+  if (currentType === colType) {
+    console.log(`[${table}] 컬럼 타입이 이미 목표 타입과 일치합니다. 스킵.`);
+    return;
+  }
+
+  console.log(`[${table}] 인덱스 ${indexName} 삭제 중...`);
+  await pool.query(`DROP INDEX IF EXISTS ${SCHEMA}.${indexName}`);
+
+  console.log(`[${table}] 컬럼 타입 변환 중: ${currentType} → ${colType} (임베딩 데이터 NULL 초기화)`);
+  await pool.query(
+    `ALTER TABLE ${SCHEMA}.${table}
+     ALTER COLUMN embedding TYPE ${colType} USING NULL`
+  );
+
+  console.log(`[${table}] HNSW 인덱스 재생성 중...`);
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS ${indexName}
+     ON ${SCHEMA}.${table}
+     USING hnsw (embedding ${opsType})
+     WITH (m = 16, ef_construction = 64)
+     WHERE embedding IS NOT NULL`
+  );
+}
 
 async function main() {
   const dims       = EMBEDDING_DIMENSIONS;
@@ -34,51 +82,12 @@ async function main() {
   const pool = getPrimaryPool();
 
   try {
-    /** 1. 현재 컬럼 타입 조회 */
-    const { rows } = await pool.query(
-      `SELECT udt_name
-       FROM information_schema.columns
-       WHERE table_schema = $1 AND table_name = $2 AND column_name = 'embedding'`,
-      [SCHEMA, TABLE]
-    );
-
-    if (rows.length === 0) {
-      console.error(`컬럼 ${SCHEMA}.${TABLE}.embedding 을 찾을 수 없습니다.`);
-      process.exit(1);
+    for (const target of TARGETS) {
+      await migrateEmbeddingColumn(pool, target, colType, opsType);
     }
-
-    const currentType = rows[0].udt_name;
-    console.log(`현재 컬럼 타입: ${currentType}`);
-
-    const targetUdt = useHalfvec ? "halfvec" : "vector";
-    if (currentType === targetUdt) {
-      console.log("컬럼 타입이 이미 목표 타입과 일치합니다. 스킵.");
-      return;
-    }
-
-    /** 2. 기존 HNSW 인덱스 삭제 (ALTER COLUMN 전 필수) */
-    console.log(`인덱스 ${INDEX_NAME} 삭제 중...`);
-    await pool.query(`DROP INDEX IF EXISTS ${SCHEMA}.${INDEX_NAME}`);
-
-    /** 3. 컬럼 타입 변환 — 기존 임베딩 NULL로 초기화 */
-    console.log(`컬럼 타입 변환 중: ${currentType} → ${colType} (임베딩 데이터 NULL 초기화)`);
-    await pool.query(
-      `ALTER TABLE ${SCHEMA}.${TABLE}
-       ALTER COLUMN embedding TYPE ${colType} USING NULL`
-    );
-
-    /** 4. HNSW 인덱스 재생성 */
-    console.log("HNSW 인덱스 재생성 중...");
-    await pool.query(
-      `CREATE INDEX IF NOT EXISTS ${INDEX_NAME}
-       ON ${SCHEMA}.${TABLE}
-       USING hnsw (embedding ${opsType})
-       WITH (m = 16, ef_construction = 64)
-       WHERE embedding IS NOT NULL`
-    );
 
     console.log("마이그레이션 완료.");
-    console.log("임베딩 데이터가 초기화되었습니다. backfill-embeddings.js를 실행하여 재임베딩하세요.");
+    console.log("fragments/morpheme_dict 임베딩 데이터가 초기화되었습니다. backfill-embeddings.js 또는 reembed-all.js를 실행하여 재임베딩하세요.");
   } finally {
     await pool.end();
   }
