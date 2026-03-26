@@ -4,17 +4,19 @@
  * 작성자: 최진호
  * 작성일: 2026-03-26
  *
- * MEMENTO_ACCESS_KEY 환경변수가 프로세스 시작 전 설정되어야 한다.
- * 실행: MEMENTO_ACCESS_KEY=test-key node --test tests/unit/admin-static-assets.test.js
+ * 인증 테스트(401)는 MEMENTO_ACCESS_KEY 환경변수가 모듈 로드 전에 설정되어야 한다.
+ * 전체 suite 실행 시 config.js 캐시로 인해 인증 테스트가 skip될 수 있으며,
+ * 이 경우 단독 실행으로 검증: MEMENTO_ACCESS_KEY=test node --test tests/unit/admin-static-assets.test.js
  */
 
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { handleAdminStatic } from "../../lib/admin/admin-routes.js";
+import { ACCESS_KEY } from "../../lib/config.js";
 
-const TEST_KEY = process.env.MEMENTO_ACCESS_KEY;
+const TEST_KEY = ACCESS_KEY || "test-fallback-key";
 
-/** mock request 생성 */
+/** mock request */
 function mockReq(urlPath, { masterKey = null } = {}) {
   const headers = {};
   if (masterKey) headers.authorization = `Bearer ${masterKey}`;
@@ -76,10 +78,19 @@ describe("handleAdminStatic", () => {
     handleAdminStatic(req, res);
   });
 
-  it("returns 401 without master key", (_, done) => {
+  it("returns 401 without master key when ACCESS_KEY is set", { skip: !ACCESS_KEY }, (_, done) => {
     const req = mockReq("/v1/internal/model/nothing/assets/admin.css");
     const res = mockRes((r) => {
       assert.strictEqual(r.statusCode, 401);
+      done();
+    });
+    handleAdminStatic(req, res);
+  });
+
+  it("returns 200 without master key when ACCESS_KEY is not set", { skip: !!ACCESS_KEY }, (_, done) => {
+    const req = mockReq("/v1/internal/model/nothing/assets/admin.css");
+    const res = mockRes((r) => {
+      assert.strictEqual(r.statusCode, 200);
       done();
     });
     handleAdminStatic(req, res);
