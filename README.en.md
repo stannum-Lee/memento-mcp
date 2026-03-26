@@ -461,6 +461,8 @@ The Admin UI uses an app shell architecture (`assets/admin/index.html` + `admin.
 | Sessions | Session list, detail view, activity tracking, manual reflect, termination, expired cleanup, bulk reflect unreflected | Implemented |
 | Logs | Log file list, content viewer (reverse-read tail), level/search filter, statistics | Implemented |
 
+For screen layout and usage instructions, see [Admin Console Guide](docs/admin-console-guide.md).
+
 The `/stats` endpoint response now includes additional fields: `searchMetrics`, `observability`, `queues`, and `healthFlags`.
 
 ### API Key Groups

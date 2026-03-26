@@ -442,6 +442,8 @@ Admin UI는 app shell 아키텍처로 구성된다 (`assets/admin/index.html` + 
 | 세션 | 세션 목록, 상세 조회, 활동 추적, 수동 reflect, 종료, 만료 정리, 미반영 일괄 reflect | 구현 완료 |
 | 로그 | 로그 파일 목록, 내용 조회(역순 tail), 레벨/검색 필터, 통계 | 구현 완료 |
 
+각 탭의 화면 구성과 조작 방법은 [관리자 콘솔 사용 안내](docs/admin-console-guide.md)를 참고한다.
+
 `/stats` 응답에는 기본 통계 외에 `searchMetrics`, `observability`, `queues`, `healthFlags` 필드가 추가되었다.
 
 ### API 키 그룹
