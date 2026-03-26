@@ -149,5 +149,28 @@ export const MEMORY_CONFIG = {
     repeatedResolutionMin: 2,
     idTokenMinDigits    : 4,
     maxTokenLength      : 40
+  },
+  qualityGuards: {
+    syntheticTopicFragments: {
+      maxAbsolute: 0
+    },
+    contradictionFragments: {
+      maxAbsolute: 0
+    },
+    noisyFragments: {
+      maxAbsolute: 0
+    },
+    sessionReflect: {
+      maxAbsolute           : 12,
+      maxFractionOfFragments: 0.12,
+      minFragmentsForFraction: 50,
+      maxNoisyCount         : 0
+    },
+    morphemes: {
+      maxNoisyCount      : 0,
+      maxHexLikeCount    : 0,
+      maxNumericOnlyCount: 0,
+      maxDiffStopwordCount: 0
+    }
   }
 };
