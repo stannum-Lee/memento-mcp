@@ -458,8 +458,8 @@ The Admin UI uses an app shell architecture (`assets/admin/index.html` + `admin.
 | API Keys | Key list/creation/management, status changes, usage tracking | Implemented |
 | Groups | Key group management, member assignment | Implemented |
 | Memory Operations | Fragment search/filter, anomaly detection, search observability | Implemented |
-| Sessions | Session monitoring | Scaffold (pending) |
-| Logs | Log viewer | Scaffold (pending) |
+| Sessions | Session list, detail view, activity tracking, manual reflect, termination, expired cleanup, bulk reflect unreflected | Implemented |
+| Logs | Log file list, content viewer (reverse-read tail), level/search filter, statistics | Implemented |
 
 The `/stats` endpoint response now includes additional fields: `searchMetrics`, `observability`, `queues`, and `healthFlags`.
 
@@ -481,8 +481,19 @@ Admin REST endpoints:
 | GET | `.../groups/:id/members` | List group members |
 | POST | `.../groups/:id/members` | Add key to group (`{ key_id }`) |
 | DELETE | `.../groups/:gid/members/:kid` | Remove key from group |
+| GET | `.../memory/overview` | Memory overview (type/topic distribution, quality pending, superseded, recent activity) |
+| GET | `.../memory/search-events?days=N` | Search event analysis (total searches, failed queries, feedback stats) |
 | GET | `.../memory/fragments?topic=&type=&key_id=&page=&limit=` | Search/filter fragments (paginated) |
 | GET | `.../memory/anomalies` | Anomaly detection results |
+| GET | `.../sessions` | Session list (with activity enrichment and unreflected count) |
+| GET | `.../sessions/:id` | Session detail (search events, tool feedback) |
+| POST | `.../sessions/:id/reflect` | Manual reflect execution |
+| DELETE | `.../sessions/:id` | Terminate session |
+| POST | `.../sessions/cleanup` | Cleanup expired sessions |
+| POST | `.../sessions/reflect-all` | Bulk reflect unreflected sessions |
+| GET | `.../logs/files` | Log file list with sizes |
+| GET | `.../logs/read?file=&tail=&level=&search=` | Parsed log content (reverse-read tail, level/search filter) |
+| GET | `.../logs/stats` | Log statistics (level counts, recent errors, disk usage) |
 | GET | `.../assets/*` | Static asset serving (admin.css, admin.js). No authentication required. |
 
 ---
@@ -1499,8 +1510,19 @@ See **[INSTALL.en.md](INSTALL.en.md)** for full installation, migration, client 
 | `GET` | `/v1/internal/model/nothing/groups/:id/members` | List group members |
 | `POST` | `/v1/internal/model/nothing/groups/:id/members` | Add key to group |
 | `DELETE` | `/v1/internal/model/nothing/groups/:gid/members/:kid` | Remove key from group |
+| `GET` | `/v1/internal/model/nothing/memory/overview` | Memory overview (type/topic distribution, quality pending, superseded, recent activity) |
+| `GET` | `/v1/internal/model/nothing/memory/search-events` | Search event analysis (days, total searches, failed queries, feedback stats) |
 | `GET` | `/v1/internal/model/nothing/memory/fragments` | Search/filter fragments (topic, type, key_id, page, limit) |
 | `GET` | `/v1/internal/model/nothing/memory/anomalies` | Anomaly detection results |
+| `GET` | `/v1/internal/model/nothing/sessions` | Session list (activity enrichment, unreflected count) |
+| `GET` | `/v1/internal/model/nothing/sessions/:id` | Session detail (search events, tool feedback) |
+| `POST` | `/v1/internal/model/nothing/sessions/:id/reflect` | Manual reflect execution |
+| `DELETE` | `/v1/internal/model/nothing/sessions/:id` | Terminate session |
+| `POST` | `/v1/internal/model/nothing/sessions/cleanup` | Cleanup expired sessions |
+| `POST` | `/v1/internal/model/nothing/sessions/reflect-all` | Bulk reflect unreflected sessions |
+| `GET` | `/v1/internal/model/nothing/logs/files` | Log file list with sizes |
+| `GET` | `/v1/internal/model/nothing/logs/read` | Parsed log content (file, tail, level, search parameters) |
+| `GET` | `/v1/internal/model/nothing/logs/stats` | Log statistics (level counts, recent errors, disk usage) |
 
 ### /health Endpoint Policy
 

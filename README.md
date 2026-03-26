@@ -439,8 +439,8 @@ Admin UI는 app shell 아키텍처로 구성된다 (`assets/admin/index.html` + 
 | API 키 | 키 목록/생성/관리, 상태 변경, 사용량 추적 | 구현 완료 |
 | 그룹 | 키 그룹 관리, 멤버 할당 | 구현 완료 |
 | 메모리 운영 | 파편 검색/필터, 이상 탐지, 검색 관측성 | 구현 완료 |
-| 세션 | 세션 모니터링 | 후속 구현 예정 |
-| 로그 | 로그 뷰어 | 후속 구현 예정 |
+| 세션 | 세션 목록, 상세 조회, 활동 추적, 수동 reflect, 종료, 만료 정리, 미반영 일괄 reflect | 구현 완료 |
+| 로그 | 로그 파일 목록, 내용 조회(역순 tail), 레벨/검색 필터, 통계 | 구현 완료 |
 
 `/stats` 응답에는 기본 통계 외에 `searchMetrics`, `observability`, `queues`, `healthFlags` 필드가 추가되었다.
 
@@ -462,8 +462,19 @@ Admin REST 엔드포인트:
 | GET | `.../groups/:id/members` | 그룹 소속 키 목록 |
 | POST | `.../groups/:id/members` | 키를 그룹에 추가 (`{ key_id }`) |
 | DELETE | `.../groups/:gid/members/:kid` | 키를 그룹에서 제거 |
+| GET | `.../memory/overview` | 메모리 전체 현황 (유형/토픽 분포, 품질 미검증, superseded, 최근 활동) |
+| GET | `.../memory/search-events?days=N` | 검색 이벤트 분석 (총 검색 수, 실패 쿼리, 피드백 통계) |
 | GET | `.../memory/fragments?topic=&type=&key_id=&page=&limit=` | 파편 검색/필터링 (페이지네이션) |
 | GET | `.../memory/anomalies` | 이상 탐지 결과 조회 |
+| GET | `.../sessions` | 세션 목록 (활동 enrichment, 미반영 세션 수 포함) |
+| GET | `.../sessions/:id` | 세션 상세 (검색 이벤트, 도구 피드백 포함) |
+| POST | `.../sessions/:id/reflect` | 수동 reflect 실행 |
+| DELETE | `.../sessions/:id` | 세션 종료 |
+| POST | `.../sessions/cleanup` | 만료 세션 정리 |
+| POST | `.../sessions/reflect-all` | 미반영 세션 일괄 reflect |
+| GET | `.../logs/files` | 로그 파일 목록 (크기 포함) |
+| GET | `.../logs/read?file=&tail=&level=&search=` | 로그 내용 조회 (역순 tail, 레벨/검색 필터) |
+| GET | `.../logs/stats` | 로그 통계 (레벨별 카운트, 최근 에러, 디스크 사용량) |
 | GET | `.../assets/*` | Admin 정적 파일 서빙 (admin.css, admin.js). 인증 불필요 |
 
 ---
@@ -1280,8 +1291,19 @@ EMBEDDING_DIMENSIONS=768
 | GET | /v1/internal/model/nothing/groups/:id/members | 그룹 멤버 목록 |
 | POST | /v1/internal/model/nothing/groups/:id/members | 키를 그룹에 추가 |
 | DELETE | /v1/internal/model/nothing/groups/:gid/members/:kid | 그룹에서 키 제거 |
+| GET | /v1/internal/model/nothing/memory/overview | 메모리 전체 현황 (유형/토픽 분포, 품질 미검증, superseded, 최근 활동) |
+| GET | /v1/internal/model/nothing/memory/search-events?days=N | 검색 이벤트 분석 (총 검색 수, 실패 쿼리, 피드백 통계) |
 | GET | /v1/internal/model/nothing/memory/fragments | 파편 검색/필터링 (topic, type, key_id, page, limit) |
 | GET | /v1/internal/model/nothing/memory/anomalies | 이상 탐지 결과 |
+| GET | /v1/internal/model/nothing/sessions | 세션 목록 (활동 enrichment, 미반영 세션 수) |
+| GET | /v1/internal/model/nothing/sessions/:id | 세션 상세 (검색 이벤트, 도구 피드백) |
+| POST | /v1/internal/model/nothing/sessions/:id/reflect | 수동 reflect 실행 |
+| DELETE | /v1/internal/model/nothing/sessions/:id | 세션 종료 |
+| POST | /v1/internal/model/nothing/sessions/cleanup | 만료 세션 정리 |
+| POST | /v1/internal/model/nothing/sessions/reflect-all | 미반영 세션 일괄 reflect |
+| GET | /v1/internal/model/nothing/logs/files | 로그 파일 목록 (크기 포함) |
+| GET | /v1/internal/model/nothing/logs/read | 로그 내용 조회 (file, tail, level, search 파라미터) |
+| GET | /v1/internal/model/nothing/logs/stats | 로그 통계 (레벨별 카운트, 최근 에러, 디스크 사용량) |
 
 ### /health 엔드포인트 정책
 
