@@ -1136,7 +1136,7 @@ function renderKeyTable(keys) {
       k.groups.forEach(g => {
         const chip = document.createElement("span");
         chip.className = "px-2 py-0.5 bg-white/5 rounded-sm text-[10px] text-slate-400 border border-white/10 uppercase font-bold";
-        chip.textContent = g;
+        chip.textContent = typeof g === "string" ? g : (g.name ?? g.id ?? "?");
         groupWrap.appendChild(chip);
       });
     } else {
@@ -1300,9 +1300,10 @@ function renderKeyInspector(key) {
   groupChips.className = "flex flex-wrap gap-2 mb-2";
   if (key.groups?.length) {
     key.groups.forEach(g => {
+      const gName = typeof g === "string" ? g : (g.name ?? g.id ?? "?");
       const chip = document.createElement("span");
       chip.className = "px-2 py-0.5 bg-white/5 rounded-sm text-[10px] text-slate-400 border border-white/10 uppercase font-bold flex items-center gap-1";
-      chip.textContent = g;
+      chip.textContent = gName;
       const rmIcon = document.createElement("span");
       rmIcon.className = "material-symbols-outlined text-[12px] text-slate-500 cursor-pointer hover:text-error";
       rmIcon.textContent = "close";
