@@ -128,6 +128,19 @@ RERANKER_ENABLED        - cross-encoder reranking 활성화 (기본: false)
 
 환경 변수 전체 목록은 [README.md — 환경 변수](../README.md#환경-변수) 참조.
 
+## CLI 사용법
+
+```bash
+# 환경변수 로드 후 사용
+export $(grep -v '^#' .env | grep '=' | xargs)
+
+node bin/memento.js stats     # 파편 통계
+node bin/memento.js health    # 연결 진단
+node bin/memento.js recall "검색어" --topic my-topic --limit 5
+node bin/memento.js remember "기억할 내용" --topic my-topic --type fact
+node bin/memento.js inspect frag-xxxx
+```
+
 ## 서버 실행
 
 ```bash

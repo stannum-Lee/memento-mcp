@@ -3,6 +3,8 @@
 ## [2.0.0] - 2026-03-28
 
 ### Added
+- CLI tool: 9 subcommands via bin/memento.js (serve, migrate, cleanup, backfill, stats, health, recall, remember, inspect)
+- CLI argument parser (lib/cli/parseArgs.js) with zero external dependencies
 - Inline quality gate: FragmentFactory.validateContent() rejects content < 10 chars AND < 3 words, URL-only, null type+topic
 - Semantic dedup gate in GraphLinker.linkFragment(): cos >= 0.95 soft delete, cos >= 0.90 warning
 - Empty session reflect filter: skip AutoReflect when 0 tool calls, 0 fragments, or < 30s duration

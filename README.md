@@ -253,6 +253,25 @@ lib/tools/
 └── index.js     도구 핸들러 export
 ```
 
+CLI 진입점과 서브커맨드는 `bin/` 및 `lib/cli/`에 분리되어 있다.
+
+```
+bin/
+└── memento.js          CLI 진입점
+
+lib/cli/
+├── parseArgs.js        인자 파서
+├── serve.js            서버 시작
+├── migrate.js          마이그레이션
+├── cleanup.js          노이즈 정리
+├── backfill.js         임베딩 백필
+├── stats.js            통계 조회
+├── health.js           연결 진단
+├── recall.js           터미널 recall
+├── remember.js         터미널 remember
+└── inspect.js          파편 상세
+```
+
 1회성 유틸리티 스크립트는 `scripts/`에 분리되어 있다.
 
 ```
@@ -1401,6 +1420,30 @@ DATABASE_URL=postgresql://user:pass@host:port/db npm run test:e2e
 ```bash
 npm run test:ci          # npm test + test:e2e
 ```
+
+---
+
+## CLI
+
+```bash
+node bin/memento.js <command> [options]
+# 또는
+npm run cli -- <command> [options]
+```
+
+| 커맨드 | 설명 |
+|--------|------|
+| `serve` | 서버 시작 |
+| `migrate` | DB 마이그레이션 실행 |
+| `cleanup [--execute]` | 노이즈 파편 정리 (기본 dry-run) |
+| `backfill` | 임베딩 백필 |
+| `stats` | 파편/앵커/토픽 통계 |
+| `health` | DB/Redis/임베딩 연결 진단 |
+| `recall <query> [--topic x] [--limit n] [--time-range from,to]` | 터미널 recall |
+| `remember <content> --topic x --type fact` | 터미널 remember |
+| `inspect <id>` | 파편 상세 + 1-hop 링크 |
+
+모든 커맨드는 `--json` 플래그로 JSON 출력 지원.
 
 ---
 
