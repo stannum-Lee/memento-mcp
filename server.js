@@ -13,7 +13,7 @@
 import http from "http";
 
 /** 설정 */
-import { PORT, ACCESS_KEY, SESSION_TTL_MS, LOG_DIR, RATE_LIMIT_WINDOW_MS, RATE_LIMIT_MAX_REQUESTS } from "./lib/config.js";
+import { PORT, ACCESS_KEY, SESSION_TTL_MS, LOG_DIR, RATE_LIMIT_WINDOW_MS, RATE_LIMIT_MAX_REQUESTS, detectPgvectorSchema, PGVECTOR_SCHEMA } from "./lib/config.js";
 
 /** Rate Limiting */
 import { RateLimiter } from "./lib/rate-limiter.js";
@@ -30,7 +30,7 @@ import {
 
 /** 도구 (통계 저장용) */
 import { saveAccessStats } from "./lib/tools/index.js";
-import { shutdownPool } from "./lib/tools/db.js";
+import { shutdownPool, getPrimaryPool } from "./lib/tools/db.js";
 import { getMemoryEvaluator } from "./lib/memory/MemoryEvaluator.js";
 
 /** 메트릭 */
@@ -199,6 +199,16 @@ server.listen(PORT, () => {
   }
 
   console.log(`Session TTL: ${SESSION_TTL_MS / 60000} minutes`);
+
+  /** pgvector 스키마 자동 감지 (PGVECTOR_SCHEMA 미설정 시) */
+  const pool = getPrimaryPool();
+  if (pool) {
+    detectPgvectorSchema(pool).then(() => {
+      if (PGVECTOR_SCHEMA) {
+        console.log(`pgvector schema auto-detected: ${PGVECTOR_SCHEMA}`);
+      }
+    }).catch(() => {});
+  }
 
   const embeddingWorkerRef = { current: null };
   startSchedulers({ globalEmbeddingWorkerRef: embeddingWorkerRef });
