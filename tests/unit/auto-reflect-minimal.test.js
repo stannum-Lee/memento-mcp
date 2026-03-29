@@ -22,9 +22,9 @@ test("autoReflect skips minimal reflect when only noisy keywords exist", async (
     reflected: false,
     toolCalls: { recall: 2 },
     keywords: ["files", "changed", "deadbeefcafebabe"],
-    fragments: [],
-    startedAt: new Date().toISOString(),
-    lastActivity: new Date().toISOString()
+    fragments: ["frag-1"],
+    startedAt: "2026-03-29T01:00:00.000Z",
+    lastActivity: "2026-03-29T01:01:00.000Z"
   });
   SessionActivityTracker.markReflected = async () => { marked += 1; };
   MemoryManager.getInstance = () => ({
@@ -50,9 +50,9 @@ test("autoReflect persists minimal reflect when durable keywords remain", async 
     reflected: false,
     toolCalls: { remember: 1, recall: 1 },
     keywords: ["trrc", "preset", "files"],
-    fragments: [],
-    startedAt: new Date().toISOString(),
-    lastActivity: new Date().toISOString()
+    fragments: ["frag-1", "frag-2"],
+    startedAt: "2026-03-29T01:00:00.000Z",
+    lastActivity: "2026-03-29T01:02:00.000Z"
   });
   SessionActivityTracker.markReflected = async () => { marked += 1; };
   MemoryManager.getInstance = () => ({

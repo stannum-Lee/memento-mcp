@@ -2,12 +2,12 @@
 
 ## Choose Your Starting Path
 
-- Fastest bootstrap: [Quick Start](docs/getting-started/quickstart.md)
-- Best Windows path: [Windows WSL2 Setup](docs/getting-started/windows-wsl2.md)
-- Bash-free Windows path: [Windows PowerShell Setup](docs/getting-started/windows-powershell.md)
-- Claude Code integration: [Claude Code Configuration](docs/getting-started/claude-code.md)
-- Post-install verification: [First Memory Flow](docs/getting-started/first-memory-flow.md)
-- Common failures: [Troubleshooting](docs/getting-started/troubleshooting.md)
+- Fastest bootstrap: [Quick Start](getting-started/quickstart.md)
+- Best Windows path: [Windows WSL2 Setup](getting-started/windows-wsl2.md)
+- Bash-free Windows path: [Windows PowerShell Setup](getting-started/windows-powershell.md)
+- Claude Code integration: [Claude Code Configuration](getting-started/claude-code.md)
+- Post-install verification: [First Memory Flow](getting-started/first-memory-flow.md)
+- Common failures: [Troubleshooting](getting-started/troubleshooting.md)
 
 ## Support Policy
 
@@ -92,7 +92,21 @@ psql $DATABASE_URL -f lib/memory/migration-010-ema-activation.sql
 
 # API key groups (N:M mapping for cross-agent memory sharing)
 psql $DATABASE_URL -f lib/memory/migration-011-key-groups.sql
+
+# Quality verification column
+psql $DATABASE_URL -f lib/memory/migration-012-quality-verified.sql
+
+# Search events observability table
+psql $DATABASE_URL -f lib/memory/migration-013-search-events.sql
 ```
+
+Since v1.8.0, automatic migration is supported. Instead of running each file manually:
+
+```bash
+DATABASE_URL=postgresql://user:pass@host:port/dbname npm run migrate
+```
+
+Applied migrations are tracked in `agent_memory.schema_migrations`. Only unapplied files are executed in order.
 
 > **Upgrading from v1.1.0 or earlier**: If migration-006 is not applied, any operation that creates a `superseded_by` link — `amend`, `memory_consolidate`, and automatic relationship generation in GraphLinker — will fail with a DB constraint error. This migration is mandatory when upgrading an existing database.
 
@@ -123,7 +137,7 @@ cp .env.example .env
 # Edit .env: set DATABASE_URL, MEMENTO_ACCESS_KEY, and other required values
 ```
 
-For the full list of environment variables, see [README.en.md — Configuration](README.en.md#10-configuration).
+For the full list of environment variables, see [README.en.md — Configuration](../README.en.md#10-configuration).
 
 ## Starting the Server
 
@@ -135,7 +149,7 @@ On startup, the server logs the listening port, authentication status, session T
 
 ## MCP Client Configuration
 
-See [Claude Code Configuration](docs/getting-started/claude-code.md) for the dedicated setup guide.
+See [Claude Code Configuration](getting-started/claude-code.md) for the dedicated setup guide.
 
 For external access, expose the service through a reverse proxy (TLS termination, rate limiting). Do not publish internal host addresses or port numbers in external documentation.
 

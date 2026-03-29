@@ -56,13 +56,21 @@ export const MEMORY_CONFIG = {
     maxCoreFragments   : 15,
     maxWmFragments     : 10,
     typeSlots          : {
+      learning   : 3,
       preference : 5,
       error      : 5,
       procedure  : 5,
       decision   : 3,
       fact       : 3
     },
-    defaultTokenBudget : 2000
+    defaultTokenBudget : 2000,
+    temperatureBoost   : {
+      warmWindowDays     : 7,
+      warmBoost          : 0.2,
+      highAccessBoost    : 0.15,
+      highAccessThreshold: 5,
+      learningBoost      : 0.3,
+    }
   },
   /** recall 페이지네이션 설정 */
   pagination: {
@@ -98,6 +106,18 @@ export const MEMORY_CONFIG = {
       maxImportance        : 0.3
     }
   },
+  /** 시맨틱 중복 제거 정책 (consolidate 사이클) */
+  dedup: {
+    batchSize    : Number(process.env.DEDUP_BATCH_SIZE     || 100),
+    minFragments : Number(process.env.DEDUP_MIN_FRAGMENTS  || 5),
+  },
+  /** 기억 압축 정책 (consolidate 사이클) */
+  compress: {
+    ageDays  : Number(process.env.COMPRESS_AGE_DAYS   || 30),
+    minGroup : Number(process.env.COMPRESS_MIN_GROUP   || 3),
+  },
+  /** consolidate 주기 (ms) */
+  consolidateIntervalMs: Number(process.env.CONSOLIDATE_INTERVAL_MS || 3600000),
   /** 긴 파편 분할 정책 (Gemini CLI 사용) */
   fragmentSplit: {
     lengthThreshold  : 300,   // 이 길이(자) 초과 파편을 분할 대상으로 선정

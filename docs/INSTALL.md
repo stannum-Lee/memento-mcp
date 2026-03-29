@@ -2,12 +2,12 @@
 
 ## 시작 경로 선택
 
-- 최소 실행만 빨리 확인: [Quick Start](docs/getting-started/quickstart.md)
-- Windows에서 가장 안정적인 설치: [Windows WSL2 Setup](docs/getting-started/windows-wsl2.md)
-- Windows에서 Bash 없이 수동 설치: [Windows PowerShell Setup](docs/getting-started/windows-powershell.md)
-- Claude Code 연동: [Claude Code Configuration](docs/getting-started/claude-code.md)
-- 설치 후 첫 검증: [First Memory Flow](docs/getting-started/first-memory-flow.md)
-- 문제 해결: [Troubleshooting](docs/getting-started/troubleshooting.md)
+- 최소 실행만 빨리 확인: [Quick Start](getting-started/quickstart.md)
+- Windows에서 가장 안정적인 설치: [Windows WSL2 Setup](getting-started/windows-wsl2.md)
+- Windows에서 Bash 없이 수동 설치: [Windows PowerShell Setup](getting-started/windows-powershell.md)
+- Claude Code 연동: [Claude Code Configuration](getting-started/claude-code.md)
+- 설치 후 첫 검증: [First Memory Flow](getting-started/first-memory-flow.md)
+- 문제 해결: [Troubleshooting](getting-started/troubleshooting.md)
 
 ## 지원 정책
 
@@ -65,7 +65,18 @@ psql $DATABASE_URL -f lib/memory/migration-009-co-retrieved.sql  # co_retrieved 
 psql $DATABASE_URL -f lib/memory/migration-010-ema-activation.sql # EMA 활성화 컬럼 추가
 psql $DATABASE_URL -f lib/memory/migration-011-key-groups.sql      # API 키 그룹
 psql $DATABASE_URL -f lib/memory/migration-012-quality-verified.sql # quality_verified 컬럼 추가
+psql $DATABASE_URL -f lib/memory/migration-013-search-events.sql   # 검색 이벤트 관측성 테이블 추가
+psql "$DATABASE_URL" -f lib/memory/migration-014-ttl-short.sql
+psql "$DATABASE_URL" -f lib/memory/migration-015-created-at-index.sql
 ```
+
+v1.8.0부터 자동 마이그레이션을 지원한다. 위 수동 실행 대신:
+
+```bash
+DATABASE_URL=postgresql://user:pass@host:port/dbname npm run migrate
+```
+
+`agent_memory.schema_migrations` 테이블에 적용 이력이 기록되며, 미적용 파일만 순서대로 실행된다.
 
 > **v1.1.0 이전에서 업그레이드하는 경우**: migration-006 미실행 시 `amend`, `memory_consolidate`, GraphLinker 자동 관계 생성에서 DB 제약 에러가 발생한다(`superseded_by` INSERT 실패). 기존 DB를 유지하며 업그레이드할 때 반드시 실행해야 한다.
 
@@ -79,6 +90,10 @@ psql $DATABASE_URL -f lib/memory/migration-012-quality-verified.sql # quality_ve
 # EMBEDDING_DIMENSIONS=3072 DATABASE_URL=$DATABASE_URL node scripts/migration-007-flexible-embedding-dims.js
 
 DATABASE_URL=$DATABASE_URL node scripts/normalize-vectors.js  # 임베딩 L2 정규화 (1회)
+
+# 노이즈 파편 정리 (수동)
+node scripts/cleanup-noise.js --dry-run   # 미리보기
+node scripts/cleanup-noise.js --execute   # 실행
 
 # 기존 파편 임베딩 백필 (임베딩 API 키 필요, 1회성)
 npm run backfill:embeddings
@@ -99,7 +114,32 @@ cp .env.example .env
 # .env 파일에서 DATABASE_URL, MEMENTO_ACCESS_KEY 등 필수 값 입력
 ```
 
-환경 변수 전체 목록은 [README.md — 환경 변수](README.md#환경-변수) 참조.
+추가 환경 변수:
+
+```
+DEDUP_BATCH_SIZE        - 시맨틱 dedup 배치 크기 (기본: 100)
+DEDUP_MIN_FRAGMENTS     - topic 내 최소 파편 수 (기본: 5)
+COMPRESS_AGE_DAYS       - 압축 대상 비활성 일수 (기본: 30)
+COMPRESS_MIN_GROUP      - 압축 그룹 최소 크기 (기본: 3)
+CONSOLIDATE_INTERVAL_MS - consolidate 주기 (기본: 3600000 = 1시간)
+ALLOWED_ORIGINS         - CORS 허용 Origin 목록 (쉼표 구분)
+RERANKER_ENABLED        - cross-encoder reranking 활성화 (기본: false)
+```
+
+환경 변수 전체 목록은 [README.md — 환경 변수](../README.md#환경-변수) 참조.
+
+## CLI 사용법
+
+```bash
+# 환경변수 로드 후 사용
+export $(grep -v '^#' .env | grep '=' | xargs)
+
+node bin/memento.js stats     # 파편 통계
+node bin/memento.js health    # 연결 진단
+node bin/memento.js recall "검색어" --topic my-topic --limit 5
+node bin/memento.js remember "기억할 내용" --topic my-topic --type fact
+node bin/memento.js inspect frag-xxxx
+```
 
 ## 서버 실행
 
@@ -109,7 +149,7 @@ node server.js
 
 ## Claude Code 연결
 
-상세 설정은 [Claude Code Configuration](docs/getting-started/claude-code.md)을 참고한다.
+상세 설정은 [Claude Code Configuration](getting-started/claude-code.md)을 참고한다.
 
 ## 훅 기반 Context 자동 로드
 
