@@ -9,6 +9,12 @@ import {
   createStreamableSession,
 } from "../../lib/sessions.js";
 import { MemoryManager } from "../../lib/memory/MemoryManager.js";
+import {
+  batchRememberDefinition,
+  recallDefinition,
+  reflectDefinition,
+  rememberDefinition,
+} from "../../lib/tools/memory-schemas.js";
 import { readResource } from "../../lib/tools/resources.js";
 import { tool_recall } from "../../lib/tools/memory.js";
 
@@ -159,5 +165,27 @@ describe("tool_recall pagination contract", () => {
     assert.equal(result.nextCursor, nextCursor);
     assert.equal(result.totalTokens, 42);
     assert.deepStrictEqual(result.searchPath, ["L2"]);
+  });
+});
+
+describe("episodic MCP surface contracts", () => {
+  it("keeps episode/context fields in remember and batch schemas", () => {
+    assert.ok(rememberDefinition.inputSchema.properties.type.enum.includes("episode"));
+    assert.ok("contextSummary" in rememberDefinition.inputSchema.properties);
+    assert.ok("sessionId" in rememberDefinition.inputSchema.properties);
+
+    const batchProperties = batchRememberDefinition.inputSchema.properties.fragments.items.properties;
+    const batchTypeEnum = batchProperties.type.enum;
+    assert.ok(batchTypeEnum.includes("episode"));
+    assert.ok("source" in batchProperties);
+    assert.ok("contextSummary" in batchProperties);
+    assert.ok("sessionId" in batchProperties);
+  });
+
+  it("keeps episode-aware recall and reflect input fields", () => {
+    assert.ok(recallDefinition.inputSchema.properties.type.enum.includes("episode"));
+    assert.ok("includeContext" in recallDefinition.inputSchema.properties);
+    assert.ok("sessionId" in reflectDefinition.inputSchema.properties);
+    assert.ok("narrative_summary" in reflectDefinition.inputSchema.properties);
   });
 });

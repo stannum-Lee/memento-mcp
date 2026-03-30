@@ -37,3 +37,34 @@ test("reflect skips noisy session_reflect items before persistence", async () =>
     ["PowerShell을 기본 shell로 유지한다.", "PowerShell을 기본 shell로 유지한다."]
   );
 });
+
+test("reflect persists narrative_summary as an episode fragment", async () => {
+  const mm = new MemoryManager();
+  let remembered = null;
+
+  mm.remember = async (params) => {
+    remembered = params;
+    return { id: "episode-1" };
+  };
+  mm._autoLinkSessionFragments = async () => {};
+  mm.index.clearWorkingMemory = async () => {};
+
+  const result = await mm.reflect({
+    sessionId: "reflect-episode-session",
+    agentId: "test",
+    narrative_summary: "The verifier followed the schema upgrade through recall, graph, and quality gates."
+  });
+
+  assert.equal(result.count, 0);
+  assert.equal(result.breakdown.episode, 1);
+  assert.deepEqual(remembered, {
+    content: "The verifier followed the schema upgrade through recall, graph, and quality gates.",
+    type: "episode",
+    topic: "session_reflect",
+    source: "session:reflect-episode-session",
+    sessionId: "reflect-episode-session",
+    importance: 0.6,
+    agentId: "test",
+    _keyId: null
+  });
+});
