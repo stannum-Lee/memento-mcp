@@ -144,7 +144,7 @@ async function routeAdminApi(req, res, {
         db:            "connected",
         redis:         redisStat,
       }));
-    } catch (err) {
+    } catch (_err) {
       res.statusCode = 500;
       res.end(JSON.stringify({ error: "Internal error" }));
     }
@@ -161,7 +161,7 @@ async function routeAdminApi(req, res, {
       const { rows } = await p.query("SELECT ...");
       res.statusCode = 200;
       res.end(JSON.stringify(rows));
-    } catch (err) {
+    } catch (_err) {
       res.statusCode = 500;
       res.end(JSON.stringify({ error: "Internal error" }));
     }
@@ -174,7 +174,7 @@ async function routeAdminApi(req, res, {
       const keys = await listApiKeysFn();
       res.statusCode = 200;
       res.end(JSON.stringify(keys));
-    } catch (err) {
+    } catch (_err) {
       res.statusCode = 500;
       res.end(JSON.stringify({ error: "Internal error" }));
     }
@@ -187,7 +187,7 @@ async function routeAdminApi(req, res, {
       const groups = await listKeyGroupsFn();
       res.statusCode = 200;
       res.end(JSON.stringify(groups));
-    } catch (err) {
+    } catch (_err) {
       res.statusCode = 500;
       res.end(JSON.stringify({ error: "Internal error" }));
     }

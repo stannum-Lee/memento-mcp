@@ -10,7 +10,7 @@
  * DB는 mock 처리하여 순수 라우팅 로직만 테스트.
  */
 
-import { describe, it, beforeEach, afterEach, mock } from "node:test";
+import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
 /* ------------------------------------------------------------------ */
@@ -22,7 +22,7 @@ let queryResults = [];
 let queryIndex   = 0;
 
 const mockPool = {
-  query(sql, params) {
+  query(_sql, _params) {
     const result = queryResults[queryIndex] ?? { rows: [] };
     queryIndex++;
     return Promise.resolve(result);
@@ -33,10 +33,10 @@ const mockPool = {
  * DB mock: getPrimaryPool이 mockPool을 반환하도록 설정.
  * admin-routes.js가 import하는 ../tools/db.js를 가로챈다.
  */
-const originalModule = await import("../../lib/tools/db.js");
+const _originalModule = await import("../../lib/tools/db.js");
 
 /** SearchMetrics mock */
-const mockSearchMetrics = {
+const _mockSearchMetrics = {
   async getStats() {
     return {
       L1:    { p50: 2.1, p90: 5.3, p99: 12.0, count: 50 },

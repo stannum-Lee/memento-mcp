@@ -211,7 +211,7 @@ describe("renderPagination", () => {
     assert.equal(el.children.length, 0);
   });
 
-  test("memoryPages=3이면 3개 버튼", () => {
+  test("memoryPages=3이면 5개 버튼 (prev + 3 pages + next)", () => {
     mod.state.memoryPages = 3;
     mod.state.memoryPage  = 1;
     const wrap = mod.renderPagination();

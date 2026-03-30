@@ -68,6 +68,8 @@ psql $DATABASE_URL -f lib/memory/migration-012-quality-verified.sql # quality_ve
 psql $DATABASE_URL -f lib/memory/migration-013-search-events.sql   # 검색 이벤트 관측성 테이블 추가
 psql "$DATABASE_URL" -f lib/memory/migration-014-ttl-short.sql
 psql "$DATABASE_URL" -f lib/memory/migration-015-created-at-index.sql
+psql "$DATABASE_URL" -f lib/memory/migration-016-agent-topic-index.sql
+psql "$DATABASE_URL" -f lib/memory/migration-017-episodic.sql
 ```
 
 v1.8.0부터 자동 마이그레이션을 지원한다. 위 수동 실행 대신:
@@ -126,7 +128,7 @@ ALLOWED_ORIGINS         - CORS 허용 Origin 목록 (쉼표 구분)
 RERANKER_ENABLED        - cross-encoder reranking 활성화 (기본: false)
 ```
 
-환경 변수 전체 목록은 [README.md — 환경 변수](../README.md#환경-변수) 참조.
+환경 변수 전체 목록은 [Configuration — 환경 변수](configuration.md#환경-변수) 참조.
 
 ## CLI 사용법
 

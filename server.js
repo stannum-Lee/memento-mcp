@@ -13,10 +13,10 @@
 import http from "http";
 
 /** 설정 */
-import { PORT, ACCESS_KEY, SESSION_TTL_MS, LOG_DIR, RATE_LIMIT_WINDOW_MS, RATE_LIMIT_MAX_REQUESTS } from "./lib/config.js";
+import { PORT, ACCESS_KEY, SESSION_TTL_MS, LOG_DIR, RATE_LIMIT_WINDOW_MS, RATE_LIMIT_PER_IP, RATE_LIMIT_PER_KEY, detectPgvectorSchema, PGVECTOR_SCHEMA } from "./lib/config.js";
 
 /** Rate Limiting */
-import { RateLimiter } from "./lib/rate-limiter.js";
+import { DualRateLimiter } from "./lib/rate-limiter.js";
 
 /** 유틸리티 */
 import { validateOrigin } from "./lib/utils.js";
@@ -30,7 +30,7 @@ import {
 
 /** 도구 (통계 저장용) */
 import { saveAccessStats } from "./lib/tools/index.js";
-import { shutdownPool } from "./lib/tools/db.js";
+import { shutdownPool, getPrimaryPool } from "./lib/tools/db.js";
 import { getMemoryEvaluator } from "./lib/memory/MemoryEvaluator.js";
 import { validateSchemaCapabilities } from "./lib/schema-preflight.js";
 
@@ -57,13 +57,15 @@ import {
   handleAdminImage,
   handleAdminStatic,
   handleAdminApi,
-  getAllowedOrigin
+  getAllowedOrigin,
+  setWorkerRefs
 } from "./lib/http-handlers.js";
 
-/** Rate Limiter 인스턴스 */
-const rateLimiter = new RateLimiter({
-  windowMs:    RATE_LIMIT_WINDOW_MS,
-  maxRequests: RATE_LIMIT_MAX_REQUESTS
+/** Rate Limiter 인스턴스 (IP/API 키 이중 제한) */
+const rateLimiter = new DualRateLimiter({
+  windowMs: RATE_LIMIT_WINDOW_MS,
+  perIp:    RATE_LIMIT_PER_IP,
+  perKey:   RATE_LIMIT_PER_KEY
 });
 setInterval(() => rateLimiter.cleanup(), 5 * 60_000).unref();
 
@@ -192,21 +194,32 @@ async function boot() {
   await validateSchemaCapabilities();
 
   server.listen(PORT, () => {
-    console.log(`Memento MCP HTTP server listening on port ${PORT}`);
-    console.log("Streamable HTTP endpoints: POST/GET/DELETE /mcp");
-    console.log("Legacy SSE endpoints: GET /sse, POST /message");
+  console.log(`Memento MCP HTTP server listening on port ${PORT}`);
+  console.log("Streamable HTTP endpoints: POST/GET/DELETE /mcp");
+  console.log("Legacy SSE endpoints: GET /sse, POST /message");
 
-    if (ACCESS_KEY) {
-      console.log("Authentication: ENABLED");
-    } else {
-      console.log("Authentication: DISABLED (set MEMENTO_ACCESS_KEY to enable)");
-    }
+  if (ACCESS_KEY) {
+    console.log("Authentication: ENABLED");
+  } else {
+    console.log("Authentication: DISABLED (set MEMENTO_ACCESS_KEY to enable)");
+  }
 
-    console.log(`Session TTL: ${SESSION_TTL_MS / 60000} minutes`);
+  console.log(`Session TTL: ${SESSION_TTL_MS / 60000} minutes`);
 
-    const embeddingWorkerRef = { current: null };
-    startSchedulers({ globalEmbeddingWorkerRef: embeddingWorkerRef });
-    globalEmbeddingWorker = embeddingWorkerRef.current;
+  /** pgvector 스키마 자동 감지 (PGVECTOR_SCHEMA 미설정 시) */
+  const pool = getPrimaryPool();
+  if (pool) {
+    detectPgvectorSchema(pool).then(() => {
+      if (PGVECTOR_SCHEMA) {
+        console.log(`pgvector schema auto-detected: ${PGVECTOR_SCHEMA}`);
+      }
+    }).catch(() => {});
+  }
+
+  const embeddingWorkerRef = { current: null };
+  startSchedulers({ globalEmbeddingWorkerRef: embeddingWorkerRef });
+  setWorkerRefs({ embeddingWorkerRef });
+  globalEmbeddingWorker = embeddingWorkerRef.current;
   });
 }
 
@@ -214,12 +227,41 @@ async function boot() {
  * Graceful Shutdown
  */
 async function gracefulShutdown(signal) {
+  const DRAIN_TIMEOUT_MS = 30_000;
   console.log(`\n[Shutdown] Received ${signal}, starting graceful shutdown...`);
 
+  /** 1. 새 요청 수신 중단 */
   server.close(() => {
     console.log("[Shutdown] HTTP server closed");
   });
 
+  /** 2. 진행 중 워커 완료 대기 (최대 30초) */
+  const drainPromises = [];
+
+  const evaluatorDrain = getMemoryEvaluator().stop();
+  if (evaluatorDrain) drainPromises.push(evaluatorDrain);
+
+  if (globalEmbeddingWorker) {
+    const embeddingDrain = globalEmbeddingWorker.stop();
+    if (embeddingDrain) drainPromises.push(embeddingDrain);
+  }
+
+  if (drainPromises.length > 0) {
+    console.log(`[Shutdown] Waiting for ${drainPromises.length} worker(s) to drain (timeout: ${DRAIN_TIMEOUT_MS}ms)...`);
+    const timeout = new Promise(resolve =>
+      setTimeout(() => {
+        console.log("[Shutdown] Worker drain timeout reached, proceeding with shutdown");
+        resolve();
+      }, DRAIN_TIMEOUT_MS)
+    );
+    await Promise.race([
+      Promise.allSettled(drainPromises),
+      timeout,
+    ]);
+    console.log("[Shutdown] Workers drained");
+  }
+
+  /** 3. 활성 세션 auto-reflect */
   console.log("[Shutdown] Closing all sessions (with auto-reflect)...");
   const { streamableIds, legacyIds } = getAllSessionIds();
   for (const sessionId of streamableIds) {
@@ -229,9 +271,7 @@ async function gracefulShutdown(signal) {
     await closeLegacySseSession(sessionId);
   }
 
-  getMemoryEvaluator().stop();
-  if (globalEmbeddingWorker) globalEmbeddingWorker.stop();
-
+  /** 4. DB/Redis 연결 종료 */
   await shutdownPool();
 
   await saveAccessStats(LOG_DIR);

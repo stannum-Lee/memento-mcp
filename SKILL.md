@@ -28,7 +28,7 @@ Memento MCP는 MCP(Model Context Protocol) 기반의 장기 기억 서버다. AI
 |------|------|------|------|
 | content | string | O | 기억할 내용. 1~3문장, 300자 이내 권장. |
 | topic | string | O | 주제 라벨. 예: database, auth, deployment, security |
-| type | string | O | fact, decision, error, preference, procedure, relation |
+| type | string | O | fact, decision, error, preference, procedure, relation, episode -- episode: 서사/맥락 기억. 전후관계와 이유를 포함하는 긴 문장 (1000자) |
 | keywords | string[] | - | 검색용 키워드. 미입력 시 자동 추출. 3~5개 권장. |
 | importance | number | - | 0.0~1.0. 미입력 시 type별 기본값 적용. |
 | source | string | - | 출처 (세션 ID, 도구명 등) |
@@ -36,6 +36,8 @@ Memento MCP는 MCP(Model Context Protocol) 기반의 장기 기억 서버다. AI
 | scope | string | - | permanent(기본) 또는 session. session은 세션 종료 시 소멸. |
 | isAnchor | boolean | - | true면 영구 보존. 중요도 감쇠/만료 삭제 대상 제외. 핵심 규칙/정책용. |
 | supersedes | string[] | - | 대체할 기존 파편 ID 목록. 지정된 파편은 valid_to 설정 + importance 반감. |
+| contextSummary | string | - | 이 기억이 생긴 맥락/배경 요약 (1-2문장) |
+| sessionId | string | - | 현재 세션 ID |
 | agentId | string | - | 에이전트 ID (RLS 격리용) |
 
 품질 게이트: content < 10자 AND 단어 < 3개, URL만, type+topic null인 경우 거부됨.
@@ -43,12 +45,30 @@ importance < 0.3이면 경고 반환 + TTL short 자동 설정.
 
 반환: `{ id, keywords, ttl_tier, scope, conflicts }`
 
+에러 케이스:
+- `fragment_limit_exceeded`: API 키의 파편 할당량 초과. 사용자에게 forget으로 불필요한 파편 정리, 관리 콘솔에서 할당량 상향, memory_consolidate로 중복 파편 정리를 안내한다.
+
 사용 시점:
 - 사용자가 선호/스타일을 명시할 때 (type=preference, importance=0.9)
 - 에러 원인이 파악됐을 때 (type=error, importance=0.8)
 - 아키텍처/기술 결정이 확정됐을 때 (type=decision, importance=0.7)
 - 새 서비스 경로/포트/설정값을 확인했을 때 (type=fact, importance=0.5)
 - 배포/빌드 절차가 완성됐을 때 (type=procedure, importance=0.7)
+
+### batch_remember
+
+여러 파편을 한번에 저장한다. 단일 트랜잭션으로 최대 200건을 일괄 INSERT하여 HTTP 라운드트립을 최소화한다. 개별 파편은 품질 게이트(validateContent)를 거치며, 부적합 파편은 건너뛴다.
+
+파라미터:
+
+| 이름 | 타입 | 필수 | 설명 |
+|------|------|------|------|
+| fragments | array | O | 저장할 파편 배열 (최대 200건). 각 항목: content(string, 필수), topic(string, 필수), type(string, 필수), importance(number), keywords(string[]). |
+| agentId | string | - | 에이전트 ID (RLS 격리용) |
+
+반환: `{ success, inserted, skipped }`
+
+주의: batch_remember는 단순 배열 저장용으로, remember의 모든 파라미터를 지원하지 않는다. 미지원: contextSummary, isAnchor, supersedes, linkedTo, scope, sessionId. episode type도 미지원. 이 속성들이 필요하면 개별 remember를 호출한다.
 
 ### recall
 
@@ -72,6 +92,7 @@ importance < 0.3이면 경고 반환 + TTL short 자동 설정.
 | cursor | string | - | 페이지네이션 커서. 이전 결과의 nextCursor 값. |
 | pageSize | number | - | 페이지 크기. 기본 20, 최대 50. |
 | excludeSeen | boolean | - | true(기본값) 시 이전 context() 호출에서 이미 주입된 파편 제외. |
+| includeContext | boolean | - | true이면 context_summary와 시간 인접 파편을 함께 반환 |
 | agentId | string | - | 에이전트 ID. |
 
 반환: `{ fragments: [{ id, content, topic, type, importance, similarity?, stale_warning? }], count, totalTokens, searchPath, _searchEventId }`

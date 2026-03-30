@@ -17,8 +17,12 @@ if (!DB_URL) {
 }
 
 async function migrate() {
-  const pool = new pg.Pool({ connectionString: DB_URL });
-  const client = await pool.connect();
+  const pool   = new pg.Pool({ connectionString: DB_URL });
+  const client  = await pool.connect();
+
+  const MIGRATE_LOCK_ID = 73657;
+  await client.query(`SELECT pg_advisory_lock(${MIGRATE_LOCK_ID})`);
+  console.log("Migration lock acquired");
 
   try {
     await client.query(`
@@ -41,8 +45,6 @@ async function migrate() {
 
     if (pending.length === 0) {
       console.log("All migrations already applied.");
-      await client.release();
-      await pool.end();
       return;
     }
 
@@ -50,7 +52,12 @@ async function migrate() {
 
     for (const file of pending) {
       console.log(`  Applying ${file}...`);
-      const sql = fs.readFileSync(path.join(MIGRATION_DIR, file), "utf-8");
+      let sql = fs.readFileSync(path.join(MIGRATION_DIR, file), "utf-8");
+      // Strip inner BEGIN/COMMIT (migrate.js wraps with outer transaction)
+      sql = sql.replace(/^\s*BEGIN\s*;?\s*$/gmi, "");
+      sql = sql.replace(/^\s*COMMIT\s*;?\s*$/gmi, "");
+      // Strip inner schema_migrations INSERT (migrate.js handles this)
+      sql = sql.replace(/INSERT\s+INTO\s+agent_memory\.schema_migrations[\s\S]*?ON\s+CONFLICT[\s\S]*?;\s*/gi, "");
 
       await client.query("BEGIN");
       try {
@@ -70,6 +77,8 @@ async function migrate() {
 
     console.log(`${pending.length} migration(s) applied successfully.`);
   } finally {
+    await client.query(`SELECT pg_advisory_unlock(${MIGRATE_LOCK_ID})`);
+    console.log("Migration lock released");
     client.release();
     await pool.end();
   }

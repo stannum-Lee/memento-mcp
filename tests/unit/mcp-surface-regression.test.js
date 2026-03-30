@@ -96,7 +96,7 @@ describe("temporal cache regression coverage", () => {
     const source = await readText("../../lib/memory/FragmentSearch.js");
 
     assert.ok(source.includes("_revalidateHotCache"));
-    assert.ok(source.includes("cached.length > 0 && !query.includeSuperseded"));
+    assert.ok(source.includes("cached.length > 0 && !sq.includeSuperseded"));
     assert.ok(source.includes("return cachedFragments"));
     assert.ok(source.includes(".filter(fragment => !fragment.valid_to)"));
   });

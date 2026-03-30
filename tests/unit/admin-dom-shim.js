@@ -122,7 +122,7 @@ function loadAdminModule() {
   const myExports = {};
   const myModule  = { exports: myExports };
 
-  const wrapper = new Function("module", "exports", "require", code);  // SAFE: fixed project file only
+  const wrapper = new Function("module", "exports", "require", code);  // SAFE: test-only, fixed project file
   wrapper(myModule, myExports, (id) => {
     throw new Error("require() not supported in admin.js test: " + id);
   });

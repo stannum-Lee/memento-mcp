@@ -98,6 +98,18 @@ psql $DATABASE_URL -f lib/memory/migration-012-quality-verified.sql
 
 # Search events observability table
 psql $DATABASE_URL -f lib/memory/migration-013-search-events.sql
+
+# TTL short-lived fragments
+psql "$DATABASE_URL" -f lib/memory/migration-014-ttl-short.sql
+
+# created_at index for time-range queries
+psql "$DATABASE_URL" -f lib/memory/migration-015-created-at-index.sql
+
+# agent_id + topic composite index
+psql "$DATABASE_URL" -f lib/memory/migration-016-agent-topic-index.sql
+
+# Episodic memory table and indexes
+psql "$DATABASE_URL" -f lib/memory/migration-017-episodic.sql
 ```
 
 Since v1.8.0, automatic migration is supported. Instead of running each file manually:
@@ -137,7 +149,7 @@ cp .env.example .env
 # Edit .env: set DATABASE_URL, MEMENTO_ACCESS_KEY, and other required values
 ```
 
-For the full list of environment variables, see [README.en.md — Configuration](../README.en.md#10-configuration).
+For the full list of environment variables, see [Configuration — Environment Variables](configuration.md#environment-variables).
 
 ## Starting the Server
 
