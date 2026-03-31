@@ -1,5 +1,30 @@
 # Changelog
 
+## [2.2.0] - 2026-03-31
+
+### Added
+- Consolidator per-stage duration metrics with `timedStage` wrapper (admin /stats `lastConsolidation`)
+- Scheduler job registry for background task observability (`scheduler-registry.js`, admin /stats `schedulerJobs`)
+- Per-layer search latency tracking: L1/L2/L3 ms recorded in search_events (admin /stats `pathPerformance`)
+- Redis index warmup on server start (`FragmentIndex.warmup()`, eliminates cold-start L1 misses)
+- API key fragment quota system (default 5000, `FRAGMENT_DEFAULT_LIMIT` env var)
+- Episode fragment contextSummary auto-generation in reflect
+
+### Fixed
+- path-to-regexp ReDoS vulnerability (GHSA-j3q9, GHSA-27v5)
+- L1 cache miss rate measurement: text-only queries no longer counted as L1 miss
+- Quota check double-release bug
+- migrate.js strips inner BEGIN/COMMIT for transactional safety
+- migration-019: schema-qualified `nerdvana.vector_cosine_ops`
+
+### Changed
+- HNSW index: ef_construction 64→128, ef_search=80 session-level (migration-019)
+- Added migration-020: search_events layer latency columns
+
+### Documentation
+- Tool count corrected 12→13 across all docs
+- MCP instructions: recommend episode fragments with contextSummary in reflect
+
 ## [2.1.0] - 2026-03-29
 
 ### Added
@@ -65,7 +90,7 @@
 
 ### Changed
 - calibrateByFeedback: 24h -> 7d window, additive -> multiplicative (1.1x/0.85x)
-- consolidate default interval: 6h -> 1h (CONSOLIDATE_INTERVAL_MS)
+- consolidate default interval: 6h (CONSOLIDATE_INTERVAL_MS, configurable)
 - RRF weights: L1(2x) > L2.5Graph(1.5x) > L2(1x) = L3(1x)
 - FragmentReader: utility_score included in all SELECT queries
 

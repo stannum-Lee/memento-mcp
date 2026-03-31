@@ -16,7 +16,7 @@ Memento MCP는 MCP(Model Context Protocol) 기반의 장기 기억 서버다. AI
 - 키 격리: API 키별로 파편이 분리되어 다른 키의 기억에 접근 불가. 키 그룹으로 공유 가능.
 - 스코프: permanent(기본, 장기 기억)와 session(세션 워킹 메모리, 세션 종료 시 소멸) 2종.
 
-## 도구 레퍼런스 (12개)
+## 도구 레퍼런스 (13개)
 
 ### remember
 
@@ -81,7 +81,7 @@ importance < 0.3이면 경고 반환 + TTL short 자동 설정.
 | keywords | string[] | - | 키워드 검색. L1/L2 경로. |
 | text | string | - | 자연어 검색 쿼리. L3 시맨틱 검색 사용. |
 | topic | string | - | 주제 필터. |
-| type | string | - | 타입 필터. fact, decision, error, preference, procedure, relation |
+| type | string | - | 타입 필터. fact, decision, error, preference, procedure, relation (episode 유형은 recall type 필터에서 제외. episode 검색은 topic 또는 text 파라미터로 수행) |
 | tokenBudget | number | - | 최대 반환 토큰 수. 기본 1000. |
 | includeLinks | boolean | - | 연결된 파편 포함 여부. 기본 true. 1-hop 제한, caused_by/resolved_by 우선. |
 | linkRelationType | string | - | 연결 파편 관계 유형 필터. related, caused_by, resolved_by, part_of, contradicts |
@@ -93,6 +93,7 @@ importance < 0.3이면 경고 반환 + TTL short 자동 설정.
 | pageSize | number | - | 페이지 크기. 기본 20, 최대 50. |
 | excludeSeen | boolean | - | true(기본값) 시 이전 context() 호출에서 이미 주입된 파편 제외. |
 | includeContext | boolean | - | true이면 context_summary와 시간 인접 파편을 함께 반환 |
+| includeKeywords | boolean | false | true 시 응답에 keywords 배열 포함 |
 | agentId | string | - | 에이전트 ID. |
 
 반환: `{ fragments: [{ id, content, topic, type, importance, similarity?, stale_warning? }], count, totalTokens, searchPath, _searchEventId }`
@@ -221,6 +222,7 @@ importance < 0.3이면 경고 반환 + TTL short 자동 설정.
 | context | string | - | 사용 맥락 요약. 50자 이내. |
 | session_id | string | - | 세션 ID. |
 | trigger_type | string | - | sampled(훅 샘플링) 또는 voluntary(AI 자발적, 기본값). |
+| fragment_ids | string[] | - | 피드백 대상 파편 ID 목록 (ema_activation 조정용) |
 | search_event_id | integer | - | 직전 recall이 반환한 _searchEventId. 검색 품질 분석에 사용. |
 
 ### memory_stats
