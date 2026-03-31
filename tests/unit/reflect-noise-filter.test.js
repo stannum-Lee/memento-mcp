@@ -57,14 +57,14 @@ test("reflect persists narrative_summary as an episode fragment", async () => {
 
   assert.equal(result.count, 0);
   assert.equal(result.breakdown.episode, 1);
-  assert.deepEqual(remembered, {
-    content: "The verifier followed the schema upgrade through recall, graph, and quality gates.",
-    type: "episode",
-    topic: "session_reflect",
-    source: "session:reflect-episode-session",
-    sessionId: "reflect-episode-session",
-    importance: 0.6,
-    agentId: "test",
-    _keyId: null
-  });
+  assert.equal(remembered.content, "The verifier followed the schema upgrade through recall, graph, and quality gates.");
+  assert.equal(remembered.type, "episode");
+  assert.equal(remembered.topic, "session_reflect");
+  assert.equal(remembered.source, "session:reflect-episode-session");
+  assert.equal(remembered.sessionId, "reflect-episode-session");
+  assert.equal(remembered.importance, 0.6);
+  assert.equal(remembered.agentId, "test");
+  assert.equal(remembered._keyId, null);
+  assert.equal(typeof remembered.contextSummary, "string");
+  assert.notEqual(remembered.contextSummary.length, 0);
 });
