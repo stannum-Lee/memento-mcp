@@ -39,6 +39,9 @@ docker build -t memento-mcp .
 - Unit tests: `tests/unit/` (node:test runner)
 - E2E tests: `tests/e2e/` (requires PostgreSQL)
 - Jest tests: `tests/*.test.js` (root level)
+- Integration tests: `tests/integration/` — 통합 테스트 (node:test runner + Jest integration project)
+  - Jest integration project picks up `tests/integration/**/*.jest.test.js`
+  - `npm run test:integration` runs integration and e2e tests via node:test
 - Run all: `npm test`
 
 ## Pull Request Checklist
