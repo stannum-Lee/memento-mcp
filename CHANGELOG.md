@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [2.2.0] - 2026-03-31
 
 ### Added
 - Consolidator per-stage duration metrics with `timedStage` wrapper (admin /stats `lastConsolidation`)
