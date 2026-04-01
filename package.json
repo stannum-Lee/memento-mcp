@@ -1,6 +1,6 @@
 {
   "name": "memento-mcp",
-  "version": "2.2.0",
+  "version": "2.2.1",
   "license": "Apache-2.0",
   "description": "Fragment-Based Memory MCP Server",
   "main": "server.js",
@@ -27,6 +27,7 @@
   "dependencies": {
     "@huggingface/transformers": "^3.8.1",
     "@modelcontextprotocol/sdk": "^1.27.1",
+    "dotenv": "^16.0.0",
     "ioredis": "^5.9.3",
     "js-tiktoken": "^1.0.21",
     "node-fetch": "^3.3.2",
