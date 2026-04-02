@@ -1,3 +1,5 @@
+-- NOTE: vector_cosine_ops is auto-replaced by migrate.js with the correct
+--       ops class (halfvec_cosine_ops when embedding column is halfvec type).
 -- migration-008: 형태소 임베딩 사전 테이블
 --
 -- 기존 로컬 런타임이 vector / halfvec 어느 타입을 쓰고 있든

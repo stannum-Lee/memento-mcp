@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS agent_memory.fragments (
     content           TEXT NOT NULL,
     topic             TEXT NOT NULL,
     keywords          TEXT[] NOT NULL DEFAULT '{}',
-    type              TEXT NOT NULL CHECK (type IN ('fact','decision','error','preference','procedure','relation')),
+    type              TEXT NOT NULL CHECK (type IN ('fact','decision','error','preference','procedure','relation','episode')),
     importance        REAL NOT NULL DEFAULT 0.5 CHECK (importance >= 0 AND importance <= 1),
     content_hash      TEXT NOT NULL,
     source            TEXT,
@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS agent_memory.fragments (
     valid_from        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     valid_to          TIMESTAMPTZ,
     superseded_by     TEXT REFERENCES agent_memory.fragments(id),
-    ttl_tier          TEXT DEFAULT 'warm' CHECK (ttl_tier IN ('hot','warm','cold','permanent')),
+    ttl_tier          TEXT DEFAULT 'warm' CHECK (ttl_tier IN ('short','hot','warm','cold','permanent')),
     estimated_tokens  INTEGER DEFAULT 0,
     utility_score     REAL DEFAULT 1.0,
     verified_at       TIMESTAMPTZ DEFAULT NOW(),
@@ -33,6 +33,8 @@ CREATE TABLE IF NOT EXISTS agent_memory.fragments (
     quality_verified  BOOLEAN DEFAULT NULL,
     ema_activation    FLOAT DEFAULT 0.0,
     ema_last_updated  TIMESTAMPTZ,
+    -- 차원 변경 시 migration-007-flexible-embedding-dims.js 실행 (EMBEDDING_DIMENSIONS 환경변수 참조)
+    -- >2000차원 모델(Gemini gemini-embedding-001 등)은 halfvec 타입으로 자동 전환됨 (pgvector >=0.7.0 필요)
     embedding         vector(1536)
 );
 
