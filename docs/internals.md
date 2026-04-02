@@ -44,9 +44,19 @@ memory_consolidate 도구가 실행되거나 서버 내부 스케줄러(6시간 
 
 `FragmentWriter.updateTtlTier`는 `keyId` 파라미터를 받아 UPDATE 쿼리에 `key_id` 조건을 추가한다. 다른 API 키가 소유한 파편의 TTL 계층을 변경하는 크로스 키 접근을 차단한다. keyId가 null이면 마스터 키 소유 파편(`key_id IS NULL`)만 대상으로 한다.
 
+### workspace 필터 전파
+
+`FragmentSearch._buildSearchQuery()`는 쿼리에서 `workspace` 값을 정규화하여 `sq.workspace`로 보관한다. `_executeSearch()`는 이를 L2(keyword/topic) 검색 options와 L3(semantic) searchBySemantic 8번째 인자로 전달한다.
+
+`FragmentReader`의 `searchByKeywords`, `searchByTopic`, `searchBySemantic`, `searchByTimeRange`, `searchAsOf`, `searchBySource` 6개 메서드 모두 `(workspace = $N OR workspace IS NULL)` 조건을 지원한다. `_searchTemporal`도 `searchByTimeRange` 호출 시 `workspace: sq.workspace`를 전달한다.
+
+`MemoryManager`의 workspace 해석 우선순위: `params.workspace ?? params._defaultWorkspace ?? null`. `_defaultWorkspace`는 인증 시 키의 `api_keys.default_workspace`에서 읽혀 세션에 저장되며, 도구 호출 시 `args._defaultWorkspace`로 주입된다.
+
 ### 세션 자동 복구
 
-세션 스토어에서 "Session not found" 오류가 발생하면 서버가 재인증 흐름을 즉시 실행한다. 재인증 시 기존 세션의 `keyId`와 `groupKeyIds`를 복원하여 새 세션에 주입한다. 클라이언트 입장에서는 투명하게 연결이 유지되며, 재인증 이벤트는 audit 로그에 기록된다.
+세션 스토어에서 "Session not found" 또는 "Session expired" 오류가 발생하면 서버가 재인증 흐름을 즉시 실행한다. 재인증 시 기존 세션의 `keyId`와 `groupKeyIds`를 복원하여 새 세션에 주입한다. 클라이언트 입장에서는 투명하게 연결이 유지되며, 재인증 이벤트는 audit 로그에 기록된다.
+
+Legacy SSE 세션도 요청마다 `expiresAt`을 `now + SESSION_TTL_MS`로 갱신하는 슬라이딩 윈도우 방식을 적용한다.
 
 ### Redis TTL 동기화
 
@@ -62,7 +72,33 @@ SSE 스트림이 닫히면(`res.on('close')`) 서버는 SSE 응답 객체만 제
 
 ### SESSION_TTL 기본값 변경
 
-`SESSION_TTL` 환경변수의 기본값이 60분에서 240분으로 변경되었다. 장시간 작업 세션에서 인증 만료로 인한 중단을 줄이기 위한 조정이다.
+`SESSION_TTL` 환경변수의 기본값이 240분에서 43200분(30일)으로 변경되었다. 슬라이딩 윈도우 방식으로 도구 사용 시마다 TTL이 갱신되므로, 30일 비활동 후에만 만료된다. 활발히 사용 중인 세션은 사실상 만료되지 않는다.
+
+---
+
+## Reranker (Cross-Encoder 재정렬)
+
+RRF 병합 이후 상위 30건을 cross-encoder로 정밀 재정렬하여 검색 정확도를 높인다. 서버 시작 시 `preloadReranker()`를 비동기로 호출하여 첫 recall 요청 전에 모델을 준비한다.
+
+**듀얼 모드:**
+- `RERANKER_URL` 설정 시: 외부 HTTP 서비스 (`POST /rerank { query, documents[] } → { scores[] }`)
+- 미설정 시: `@huggingface/transformers` + ONNX `ms-marco-MiniLM-L-6-v2` in-process (~80MB, CPU)
+
+**외부 서비스 장애 자동 전환:** 연속 3회 실패 시 inprocess 모드로 자동 전환. 외부 서비스가 복구되어도 재시작 전까지 inprocess 유지. 어느 모드든 scores 반환 실패 시 RRF 결과 그대로 반환(graceful degradation).
+
+**최종 스코어:** `sigmoid(logit) * recency_boost`. recency_boost는 생성일 기준 365일 선형 감쇠 [0.9, 1.1] 범위.
+
+---
+
+## TemporalLinker (시간 기반 자동 링크)
+
+`remember()` 호출 시 `MemoryManager._autoLinkOnRemember()` 체인에서 비동기로 실행된다. 동일 `topic` 내 ±24h 윈도우에 있는 기존 파편과 `temporal` 링크를 최대 5건 생성한다.
+
+**가중치 공식:** `max(0.3, 1.0 - hours/24)` — 시간 차 0h=1.0, 12h=0.5, 24h=0.3.
+
+**API 키 격리:** `options.keyId`를 쿼리에 `key_id = ANY($n)`으로 전달하여 타 API 키 소유 파편을 temporal 링크 대상에서 제외한다.
+
+fragment_links.weight 컬럼은 migration-023에서 integer→real로 변경되어 float 가중치를 지원한다.
 
 ---
 
