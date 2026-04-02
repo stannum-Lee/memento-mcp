@@ -101,6 +101,14 @@ reflect 규칙:
 
 3. reflect의 summary/decisions/errors_resolved에도 동일 규칙 적용
 
+### workspace 파라미터 활용 규칙
+
+- workspace: 프로젝트·직종·클라이언트 단위로 기억을 분리하려면 workspace 파라미터를 지정한다.
+  예: `workspace: "memento-mcp"`, `workspace: "client-acme"`, `workspace: "personal"`
+- 미지정 시 키의 default_workspace가 자동 적용된다.
+- 전역 기억(모든 workspace에서 조회)으로 저장하려면 workspace를 지정하지 않고 키에 default_workspace도 없으면 된다.
+- 검색 시 workspace를 지정하면 해당 workspace 파편과 workspace=NULL(전역) 파편이 함께 반환된다.
+
 ### 키워드 품질 기준
 
 - 3~5개 권장. 너무 적으면 검색 누락, 너무 많으면 노이즈
