@@ -40,6 +40,9 @@ import { recordHttpRequest } from "./lib/metrics.js";
 /** 스케줄러 */
 import { startSchedulers } from "./lib/scheduler.js";
 
+/** Reranker 사전 로드 */
+import { preloadReranker } from "./lib/memory/Reranker.js";
+
 /** HTTP 핸들러 */
 import {
   handleHealth,
@@ -130,7 +133,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   /* OAuth 2.0 */
-  if (req.method === "GET" && url.pathname === "/.well-known/oauth-authorization-server") {
+  if (req.method === "GET" && url.pathname === "/.well-known/oauth-authorization-server/oauth") {
     await handleOAuthServerMetadata(req, res);
     return;
   }
@@ -226,6 +229,9 @@ async function boot() {
   startSchedulers({ globalEmbeddingWorkerRef: embeddingWorkerRef });
   setWorkerRefs({ embeddingWorkerRef });
   globalEmbeddingWorker = embeddingWorkerRef.current;
+
+  /** Reranker 사전 로드 (비차단 — 실패해도 서버 시작 중단 없음) */
+  preloadReranker().catch(() => {});
   });
 }
 

@@ -7,14 +7,21 @@ import { MemoryManager } from "../../lib/memory/MemoryManager.js";
 const originalGetActivity = SessionActivityTracker.getActivity;
 const originalMarkReflected = SessionActivityTracker.markReflected;
 const originalGetInstance = MemoryManager.getInstance;
+const originalDisableGemini = process.env.AUTOREFLECT_DISABLE_GEMINI;
 
 test.afterEach(() => {
   SessionActivityTracker.getActivity = originalGetActivity;
   SessionActivityTracker.markReflected = originalMarkReflected;
   MemoryManager.getInstance = originalGetInstance;
+  if (originalDisableGemini === undefined) {
+    delete process.env.AUTOREFLECT_DISABLE_GEMINI;
+  } else {
+    process.env.AUTOREFLECT_DISABLE_GEMINI = originalDisableGemini;
+  }
 });
 
 test("autoReflect skips minimal reflect when only noisy keywords exist", async () => {
+  process.env.AUTOREFLECT_DISABLE_GEMINI = "1";
   let marked = 0;
   let reflectCalled = 0;
 
@@ -43,6 +50,7 @@ test("autoReflect skips minimal reflect when only noisy keywords exist", async (
 });
 
 test("autoReflect persists minimal reflect when durable keywords remain", async () => {
+  process.env.AUTOREFLECT_DISABLE_GEMINI = "1";
   let marked = 0;
   let reflectArgs = null;
 

@@ -22,7 +22,7 @@ if (files.length === 0) {
   process.exit(1);
 }
 
-execFileSync(process.execPath, ["--test", ...files], {
+execFileSync(process.execPath, ["--test", "--test-force-exit", ...files], {
   stdio: "inherit",
   cwd: root
 });

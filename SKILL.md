@@ -101,6 +101,28 @@ reflect 규칙:
 
 3. reflect의 summary/decisions/errors_resolved에도 동일 규칙 적용
 
+### workspace 파라미터 활용 규칙
+
+- workspace: 프로젝트·직종·클라이언트 단위로 기억을 분리하려면 workspace 파라미터를 지정한다.
+  예: `workspace: "memento-mcp"`, `workspace: "client-acme"`, `workspace: "personal"`
+- 미지정 시 키의 default_workspace가 자동 적용된다.
+- 전역 기억(모든 workspace에서 조회)으로 저장하려면 workspace를 지정하지 않고 키에 default_workspace도 없으면 된다.
+- 검색 시 workspace를 지정하면 해당 workspace 파편과 workspace=NULL(전역) 파편이 함께 반환된다.
+
+#### workspace 활용 예시
+
+프로젝트별 기억 분리:
+```
+remember(content="...", topic="error", type="error", workspace="memento-mcp")
+recall(keywords=["auth"], workspace="memento-mcp")
+```
+
+전역 기억 (모든 workspace에서 공유):
+```
+remember(content="선호하는 코딩 스타일: ...", topic="preference", type="preference")
+// workspace 미지정 + 키에 default_workspace 없음 → workspace=NULL(전역)
+```
+
 ### 키워드 품질 기준
 
 - 3~5개 권장. 너무 적으면 검색 누락, 너무 많으면 노이즈
@@ -238,6 +260,7 @@ remember(
 | contextSummary | string | - | 맥락/배경 요약 (1-2문장) |
 | sessionId | string | - | 현재 세션 ID |
 | agentId | string | - | 에이전트 ID (RLS 격리용) |
+| workspace | string | - | 워크스페이스 이름. 미지정 시 키의 default_workspace 자동 적용. |
 
 품질 게이트: content < 10자, URL만, type+topic null인 경우 거부. importance < 0.3이면 경고 + TTL short 자동 설정.
 
@@ -275,6 +298,7 @@ remember(
 | includeContext | boolean | - | context_summary + 인접 파편 포함 |
 | includeKeywords | boolean | - | 응답에 keywords 배열 포함 |
 | agentId | string | - | 에이전트 ID |
+| workspace | string | - | 검색 범위 제한. 지정 시 해당 workspace + 전역(NULL) 파편만 반환. |
 
 ### forget
 
@@ -338,6 +362,7 @@ summary 또는 sessionId 중 하나 이상 필수.
 | sessionId | string | - | 워킹 메모리 로드용 |
 | structured | boolean | - | 계층 구조 반환. 기본 false. |
 | agentId | string | - | 에이전트 ID |
+| workspace | string | - | 컨텍스트 로드 범위. 지정 시 해당 workspace + 전역(NULL) 파편만 포함. |
 
 ### tool_feedback
 
